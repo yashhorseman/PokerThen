@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PokerThen — fair poker with friends</title>
+<meta name="description" content="Free private poker tables with provably fair shuffling. Create a game, share the link, play.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%99%A0%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="engine.js"></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+
+<section id="landing">
+  <div class="land-card">
+    <h1><span class="logo">♠</span> PokerThen</h1>
+    <p class="tag">Private Texas Hold'em tables with a <b>provably fair</b> shuffle. No accounts. Create a game, send the link, play.</p>
+
+    <label>Your nickname
+      <input id="in-name" maxlength="16" placeholder="e.g. Yash" autocomplete="off">
+    </label>
+
+    <div id="create-box">
+      <div class="row3">
+        <label>Small blind <input id="in-sb" type="number" min="1" value="10"></label>
+        <label>Big blind <input id="in-bb" type="number" min="1" value="20"></label>
+        <label>Starting stack <input id="in-stack" type="number" min="1" value="2000"></label>
+      </div>
+      <button id="btn-create" class="btn primary big">Create new game</button>
+      <button id="btn-resume" class="btn big" hidden></button>
+      <div class="or">or join a friend's game</div>
+      <div class="row2">
+        <input id="in-code" placeholder="Paste game link or code" autocomplete="off">
+        <button id="btn-join" class="btn">Join</button>
+      </div>
+    </div>
+
+    <div id="join-box" hidden>
+      <div class="joinmsg">You're joining game <b id="join-code"></b></div>
+      <button id="btn-join-go" class="btn primary big">Join table</button>
+      <a href="#" id="btn-back" class="link">Create my own game instead</a>
+    </div>
+
+    <ul class="feats">
+      <li>🔒 Deck is hashed <i>before</i> dealing &amp; revealed after — every hand is verifiable</li>
+      <li>🎲 Shuffle uses your browser's cryptographic RNG (unbiased)</li>
+      <li>🐇 Rabbit hunting · ✌️ Run it twice · side pots · show cards · action timer</li>
+    </ul>
+  </div>
+</section>
+
+<section id="game" hidden>
+  <header id="topbar">
+    <div class="brand"><span class="logo">♠</span> PokerThen</div>
+    <div class="grow"></div>
+    <button id="btn-copy" class="btn sm" title="Copy invite link">🔗 <span id="room-code"></span> · Copy invite link</button>
+    <button id="btn-fair" class="btn sm" title="Fairness verification">🔒 <span id="fair-badge">Fair</span></button>
+    <button id="btn-sound" class="btn sm" title="Sound on/off">🔊</button>
+    <button id="btn-admin" class="btn sm" hidden>⚙ Game</button>
+    <button id="btn-leave" class="btn sm">Leave</button>
+  </header>
+  <div id="conn-banner" hidden></div>
+
+  <div id="layout">
+    <main id="main">
+      <div id="tablewrap">
+        <div id="table">
+          <div id="felt"></div>
+          <div id="center">
+            <div id="msg"></div>
+            <div id="pot"></div>
+            <div id="boards"></div>
+          </div>
+          <div id="seats"></div>
+        </div>
+      </div>
+      <div id="actions"></div>
+    </main>
+    <aside id="side">
+      <div id="log"></div>
+      <form id="chatform" autocomplete="off">
+        <input id="chat" maxlength="200" placeholder="Type a message…">
+        <button class="btn sm">Send</button>
+      </form>
+    </aside>
+  </div>
+</section>
+
+<div id="modal-root"></div>
+<div id="toast"></div>
+
+</body>
+</html>
