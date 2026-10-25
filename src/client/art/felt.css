@@ -1,0 +1,5 @@
+/* Felt / table art (see felt.tsx). The component fills its parent; the parent decides the box (55.55 x 26.25rem landscape, 17.4 x 28rem portrait). */
+.felt-art { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.felt-art > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.felt-art.felt-blur { filter: blur(.35rem) saturate(.85) brightness(.82); transform: translateZ(0); }
+.felt-art.felt-in-flow { position: relative; }

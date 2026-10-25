@@ -1,0 +1,24 @@
+/* Art helpers (owner: art agent). Room background, table glow, card back, icons. */
+.room-bg, body.room-bg {
+  background-color: #232323;
+  background-image:
+    radial-gradient(ellipse at 50% 42%, rgba(255,255,255,.045), rgba(255,255,255,0) 68%),
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .5 -.2'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='.5'/></svg>"),
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><path d='M12 0L24 12 12 24 0 12Z' fill='none' stroke='%23fff' stroke-opacity='.025' stroke-width='1'/></svg>");
+  background-size: auto, 160px 160px, 24px 24px;
+}
+/* the darker letterbox variant (area outside the canvas) */
+.room-bg-dark { background-color: #201e1f; }
+
+/* glow overlay on the table when it is your turn (opacity transition 0.5s, research/02 §3) */
+.table-glow {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0;
+  transition: opacity .5s;
+  background: radial-gradient(ellipse 36% 38% at 50% 52%, rgba(255,246,170,.26), rgba(255,246,170,.1) 55%, rgba(255,246,170,0) 100%);
+}
+.table-glow.on, .glow > .table-glow, .glow.table-glow { opacity: 1; }
+
+.card-back-art { display: block; width: 100%; height: 100%; border-radius: inherit; box-sizing: border-box; background-color: #0c1b38; background-size: 100% 100%; background-repeat: no-repeat; background-position: center; }
+
+.icon { display: inline-block; flex: none; vertical-align: middle; overflow: visible; }
+.logo-art { display: block; }
