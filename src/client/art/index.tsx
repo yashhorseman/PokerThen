@@ -29,5 +29,14 @@ export function CardBack({ className }: { className?: string }) { return <div cl
 /** PokerThen logo. 'tag' = small black tag top-left of the table (120x28 box), 'full' = marketing/sidebar */
 export function Logo({ variant = 'tag', className }: { variant?: 'tag' | 'full'; className?: string }) { return <span className={className}>PokerThen{variant === 'full' ? '' : ''}</span>; }
 
+/**
+ * The table surface (felt + rail) drawn as original art.  Fills its parent box exactly.
+ * landscape: horizontal oval table image area 55.55rem x 26.25rem (parent decides size); portrait: vertical rounded-rect 17.4rem x 28rem.
+ * `blur` renders the blurred empty-table backdrop used behind the New Game card (research/01 §3).
+ */
+export function Felt({ orientation = 'landscape', blur = false, className }: { orientation?: 'landscape' | 'portrait'; blur?: boolean; className?: string }) {
+  return <div className={'felt-art ' + (className ?? '')} style={{ width: '100%', height: '100%', background: '#1c6b43', borderRadius: orientation === 'landscape' ? '50%' : '3rem', filter: blur ? 'blur(6px)' : undefined }} />;
+}
+
 export type SoundName = 'two-taps' | 'chips' | 'fold' | 'winner' | 'card-place' | 'beep' | 'warning-beep' | 'chat-beep' | 'new-player-beep';
 export { unlockAudio, playSound, setMasterVolume, isSecondarySound } from './sounds';
