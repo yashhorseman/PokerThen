@@ -1,2 +1,10 @@
-.DS_Store
 node_modules/
+dist/
+data/
+.DS_Store
+*.log
+.env
+audit-reports/
+.artifacts/
+dist-types/
+*.tsbuildinfo

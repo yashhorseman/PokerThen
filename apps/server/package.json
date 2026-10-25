@@ -1,0 +1,11 @@
+{
+  "name": "@pokerthen/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "node build.mjs"
+  },
+  "dependencies": { "ws": "^8.18.0" }
+}
