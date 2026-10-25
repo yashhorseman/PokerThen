@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { CSSProperties, ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { cardAria, rankLabel, SUIT } from '../format';
 
 /* ───────────── toasts ───────────── */
@@ -53,26 +53,30 @@ export function Modal({ title, onClose, children, wide, footer }: { title: strin
 }
 
 /* ───────────── cards ───────────── */
-export function CardFace({ card, size = 'md', dim, win, hypothetical }: { card: string; size?: 'sm' | 'md' | 'lg' | 'xl'; dim?: boolean; win?: boolean; hypothetical?: boolean }) {
+type CardSize = 'sm' | 'md' | 'lg' | 'xl';
+interface CardExtra { className?: string; style?: CSSProperties }
+export function CardFace({ card, size = 'md', dim, win, hypothetical, className, style }: { card: string; size?: CardSize; dim?: boolean; win?: boolean; hypothetical?: boolean } & CardExtra) {
   return (
-    <div className={`card face s-${card[1]} ${size}${dim ? ' dim' : ''}${win ? ' win' : ''}${hypothetical ? ' hypo' : ''}`} role="img" aria-label={cardAria(card)}>
+    <div className={`card face s-${card[1]} ${size}${dim ? ' dim' : ''}${win ? ' win' : ''}${hypothetical ? ' hypo' : ''}${className ? ' ' + className : ''}`} style={style} role="img" aria-label={cardAria(card)}>
       <span className="rank">{rankLabel(card)}</span>
-      <span className="suit">{SUIT[card[1]]}</span>
+      <span className="suit" aria-hidden="true">{SUIT[card[1]]}</span>
     </div>
   );
 }
-export function CardBack({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' | 'xl' }) {
-  return <div className={`card back ${size}`} role="img" aria-label="face-down card" />;
+export function CardBack({ size = 'md', className, style }: { size?: CardSize } & CardExtra) {
+  return <div className={`card back ${size}${className ? ' ' + className : ''}`} style={style} role="img" aria-label="face-down card"><span className="back-mark" aria-hidden="true">♠</span></div>;
 }
 
 /* ───────────── avatar ───────────── */
 const HUES = [152, 262, 28, 200, 340, 48, 175, 300];
-export function Avatar({ name, id, size = 28 }: { name: string; id: string; size?: number }) {
+/** `size` is px (number) or any CSS length (string, e.g. "2.2em"). */
+export function Avatar({ name, id, size = 28 }: { name: string; id: string; size?: number | string }) {
   let h = 0;
   for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   const hue = HUES[h % HUES.length];
+  const px = typeof size === 'number';
   return (
-    <span className="avatar" style={{ width: size, height: size, background: `hsl(${hue} 45% 38%)`, fontSize: size * 0.46 }} aria-hidden="true">
+    <span className="avatar" style={{ width: size, height: size, background: `hsl(${hue} 45% 38%)`, fontSize: px ? size * 0.46 : '0.95em' }} aria-hidden="true">
       {[...name][0]?.toUpperCase() ?? '?'}
     </span>
   );

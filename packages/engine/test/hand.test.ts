@@ -309,3 +309,15 @@ describe('leaving and fairness proofs', () => {
     expect(s.stacks().reduce((a, b) => a + b, 0)).toBe(600 - s.events.filter((e) => e.type === 'seat.vacated').reduce((a, e) => a + (e.cashOut as number), 0));
   });
 });
+
+describe('seat shuffling', () => {
+  it('permutes occupied seats only while stopped and between hands', () => {
+    const s = new Sim({ actionSeconds: null, bankSeconds: 0 });
+    s.seat(0, 100); s.seat(3, 200); s.seat(7, 300);
+    s.cmd({ type: 'SHUFFLE_SEATS', order: [7, 0, 3] });
+    expect(s.t.seats.map((x) => x?.stack ?? 0)).toEqual([200, 0, 0, 300, 0, 0, 0, 100, 0, 0]);
+    expect(fails(() => s.cmd({ type: 'SHUFFLE_SEATS', order: [7, 7, 3] }), 'BAD_ORDER')).toBe(true);
+    s.startGame(); // running games cannot be shuffled
+    expect(fails(() => s.cmd({ type: 'SHUFFLE_SEATS', order: [0, 3, 7] }), 'RUNNING')).toBe(true);
+  });
+});

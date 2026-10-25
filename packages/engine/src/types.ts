@@ -152,6 +152,7 @@ export type Command =
   | { type: 'SET_CONFIG'; config: Config }
   | { type: 'START_GAME'; pick: number }
   | { type: 'NEXT_HAND' }
+  | { type: 'SHUFFLE_SEATS'; order: number[] }
   | { type: 'STOP_AFTER_HAND'; value: boolean }
   | { type: 'PAUSE' }
   | { type: 'RESUME' }

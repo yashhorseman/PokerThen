@@ -234,6 +234,9 @@ function PrefsTab({ snap, send }: { snap: Snapshot; send: Send }) {
         <div className="field"><span className="field-label">Card colours</span><div className="seg-btns"><button className={p.deck === 'two' ? 'on' : ''} onClick={() => setP({ deck: 'two' })}>Two-colour</button><button className={p.deck === 'four' ? 'on' : ''} onClick={() => setP({ deck: 'four' })}>Four-colour</button></div></div>
         <div className="field"><span className="field-label">Show amounts as <span className="hint">(shortcut: B)</span></span><div className="seg-btns"><button className={p.amounts === 'chips' ? 'on' : ''} onClick={() => setP({ amounts: 'chips' })}>Chips</button><button className={p.amounts === 'bb' ? 'on' : ''} onClick={() => setP({ amounts: 'bb' })}>Big blinds</button></div></div>
         <div className="field"><span className="field-label">Sound volume</span><div className="seg-btns">{([0, 15, 45, 100] as const).map((v) => <button key={v} className={p.volume === v ? 'on' : ''} onClick={() => setP({ volume: v })}>{v === 0 ? 'Mute' : v === 15 ? 'Low' : v === 45 ? 'Medium' : 'High'}</button>)}</div></div>
+        <div className="field"><span className="field-label">Table felt</span><div className="seg-btns">{(['green', 'purple', 'blue', 'burgundy'] as const).map((v) => <button key={v} className={p.felt === v ? 'on' : ''} onClick={() => setP({ felt: v })}>{v[0].toUpperCase() + v.slice(1)}</button>)}</div></div>
+        <div className="field"><span className="field-label">Seat layout on desktop</span><div className="seg-btns"><button className={p.rotate === 'fixed' ? 'on' : ''} onClick={() => setP({ rotate: 'fixed' })}>Fixed seat numbers</button><button className={p.rotate === 'hero' ? 'on' : ''} onClick={() => setP({ rotate: 'hero' })}>Rotate so I’m at the bottom</button></div><p className="hint">Phones always put you at the bottom.</p></div>
+        <Switch label="Action shortcuts (C call/check · R raise · F fold · T time bank)" checked={p.shortcuts} onChange={(v) => setP({ shortcuts: v })} hint="Keys act instantly with no confirmation — a mis-press can fold your hand. Off by default." />
         <Switch label="Beep on new chat messages" checked={p.chatBeep} onChange={(v) => setP({ chatBeep: v })} />
         <div className="field"><span className="field-label">Reduce motion</span><div className="seg-btns">{(['system', 'on', 'off'] as const).map((v) => <button key={v} className={p.reducedMotion === v ? 'on' : ''} onClick={() => setP({ reducedMotion: v })}>{v === 'system' ? 'Follow system' : v === 'on' ? 'On' : 'Off'}</button>)}</div></div>
       </section>
@@ -248,7 +251,7 @@ function PrefsTab({ snap, send }: { snap: Snapshot; send: Send }) {
       </section>
       <section>
         <h3>Keyboard shortcuts</h3>
-        <p className="hint">B — chips / big blinds · M — focus chat · L — open the log · P — pause or resume (host). Shortcuts are off while typing. Betting has no single-key shortcuts, by design.</p>
+        <p className="hint">B — chips / big blinds · M — focus chat · L — open the log · P — pause or resume (host). They are off while typing or when a dialog is open. Action keys (C / R / F / T) only work if you turn on “Action shortcuts” above.</p>
       </section>
     </div>
   );

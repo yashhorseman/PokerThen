@@ -6,8 +6,13 @@ export interface Prefs {
   volume: 0 | 15 | 45 | 100;
   chatBeep: boolean;
   reducedMotion: 'system' | 'on' | 'off';
+  felt: 'green' | 'purple' | 'blue' | 'burgundy';
+  /** desktop seat layout: fixed numbering (same for everyone) or rotate so you sit at the bottom */
+  rotate: 'fixed' | 'hero';
+  /** single-key action shortcuts (C call/check, R raise, F fold, T time bank) — off by default to avoid accidents */
+  shortcuts: boolean;
 }
-const DEFAULTS: Prefs = { deck: 'two', amounts: 'chips', volume: 45, chatBeep: true, reducedMotion: 'system' };
+const DEFAULTS: Prefs = { deck: 'two', amounts: 'chips', volume: 45, chatBeep: true, reducedMotion: 'system', felt: 'green', rotate: 'fixed', shortcuts: false };
 const KEY = 'pt_prefs';
 
 function load(): Prefs {

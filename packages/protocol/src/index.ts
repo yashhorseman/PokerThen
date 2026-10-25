@@ -65,6 +65,7 @@ export const commandSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('chat.send'), text: z.string().min(1).max(500) }),
   z.object({ kind: z.literal('admin.start') }),
   z.object({ kind: z.literal('admin.nextHand') }),
+  z.object({ kind: z.literal('admin.shuffleSeats') }),
   z.object({ kind: z.literal('admin.pause'), value: z.boolean() }),
   z.object({ kind: z.literal('admin.stopAfterHand'), value: z.boolean() }),
   z.object({ kind: z.literal('admin.config'), expectedVersion: int.min(0), patch: configPatchSchema }),

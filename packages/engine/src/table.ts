@@ -192,6 +192,18 @@ export function apply(prev: TableState, cmd: Command, now: number): ApplyResult 
       if (eligibleSeats(t).length < 2) err('NOT_ENOUGH_PLAYERS', 'At least two funded, active players are needed.');
       t.nextHandAt = now;
       break;
+    case 'SHUFFLE_SEATS': {
+      if (isHandActive(t)) err('IN_HAND', 'Seats can only be shuffled between hands.');
+      if (t.status === 'RUNNING') err('RUNNING', 'Stop the game first — seats can only be shuffled while it is stopped.');
+      const occ = t.seats.map((x, i) => (x ? i : -1)).filter((i) => i >= 0);
+      const ok = cmd.order.length === occ.length && new Set(cmd.order).size === occ.length && cmd.order.every((i) => occ.includes(i));
+      if (!ok) err('BAD_ORDER', 'The seat order is not a permutation of the occupied seats.');
+      const old = t.seats.slice();
+      occ.forEach((i) => { t.seats[i] = null; });
+      occ.forEach((from, k) => { t.seats[cmd.order[k]] = old[from]; });
+      emit({ type: 'seats.shuffled' });
+      break;
+    }
     case 'STOP_AFTER_HAND':
       if (t.status !== 'RUNNING') err('NOT_RUNNING', 'The game is not running.');
       if (!isHandActive(t) && cmd.value) {
@@ -441,7 +453,7 @@ function afterAction(c: Ctx, h: Hand) {
 }
 
 function endStreet(c: Ctx, h: Hand) {
-  for (const p of h.players) { p.street = 0; p.acted = false; p.actedLevel = null; }
+  for (const p of h.players) { p.street = 0; p.acted = false; p.actedLevel = null; if (!p.folded) p.lastAction = null; }
   h.currentBet = 0; h.minRaise = h.rules.bb; h.fullBetMade = false;
   h.toAct = null; h.deadline = null; h.bankStartedAt = null;
   const lastAggr = h.lastAggressor;

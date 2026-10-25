@@ -1,38 +1,25 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import type { ClientCommand, Snapshot } from '@pokerthen/protocol';
+import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import type { ClientCommand, RequestView, Snapshot } from '@pokerthen/protocol';
 import { validateNickname } from '@pokerthen/protocol';
 import type { HandCheck } from '../fairness';
 import { shortTime } from '../format';
 import type { SendResult } from '../net';
-import { Modal, toast } from './ui';
+import * as I from './icons';
+import { Avatar, Modal, toast } from './ui';
 
 type Send = (c: ClientCommand) => Promise<SendResult>;
 
-/* ───────────── log / chat / ledger ───────────── */
+/* ───────────── chat ───────────── */
 
-export function SidePanel({ snap, tab, setTab, onClose, send, unread }: { snap: Snapshot; tab: 'chat' | 'log' | 'ledger'; setTab(t: 'chat' | 'log' | 'ledger'): void; onClose(): void; send: Send; unread: number }) {
-  return (
-    <aside className="sidepanel" aria-label="Chat and log">
-      <div className="tabs" role="tablist">
-        {(['chat', 'log', 'ledger'] as const).map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-            {t === 'chat' ? 'Chat' : t === 'log' ? 'Full log' : 'Ledger'}{t === 'chat' && unread > 0 ? <span className="badge">{unread}</span> : null}
-          </button>
-        ))}
-        <button className="icon-btn" aria-label="Close panel" onClick={onClose}>✕</button>
-      </div>
-      {tab === 'ledger' ? <Ledger snap={snap} /> : <LogView snap={snap} chatOnly={tab === 'chat'} send={send} />}
-    </aside>
-  );
-}
-
-function LogView({ snap, chatOnly, send }: { snap: Snapshot; chatOnly: boolean; send: Send }) {
+/** Shared message list + input, used by the desktop chat dock and the phone bottom sheet. */
+export function ChatPane({ snap, send, expanded, inputRef }: { snap: Snapshot; send: Send; expanded?: boolean; inputRef?: React.RefObject<HTMLInputElement> }) {
   const box = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
-  const entries = useMemo(() => snap.log.filter((e) => (chatOnly ? e.kind === 'chat' : true)), [snap.log, chatOnly]);
+  const chats = useMemo(() => snap.log.filter((e) => e.kind === 'chat'), [snap.log]);
   const stick = useRef(true);
-  useEffect(() => { const b = box.current; if (b && stick.current) b.scrollTop = b.scrollHeight; }, [entries.length, chatOnly]);
-  const canChat = snap.viewer.role !== 'viewer' && (snap.room.config.guestChat || snap.viewer.role === 'owner');
+  useEffect(() => { const b = box.current; if (b && stick.current) b.scrollTop = b.scrollHeight; }, [chats.length, expanded]);
+  const role = snap.viewer.role;
+  const canChat = role !== 'viewer' && (snap.room.config.guestChat || role === 'owner');
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const t = text.trim();
@@ -43,25 +30,84 @@ function LogView({ snap, chatOnly, send }: { snap: Snapshot; chatOnly: boolean; 
   };
   return (
     <>
-      <div className="logbox" ref={box} onScroll={(e) => { const b = e.currentTarget; stick.current = b.scrollHeight - b.scrollTop - b.clientHeight < 40; }} aria-live="polite" aria-relevant="additions">
-        {entries.length === 0 && <p className="hint pad">{chatOnly ? 'No messages yet.' : 'Nothing logged yet.'}</p>}
-        {entries.map((e) => {
-          const m = e.kind === 'chat' ? snap.members.find((x) => x.id === e.memberId) : null;
+      <div className="chat-msgs" ref={box} onScroll={(e) => { const b = e.currentTarget; stick.current = b.scrollHeight - b.scrollTop - b.clientHeight < 30; }} aria-live="polite" aria-relevant="additions" aria-label="Chat messages">
+        {chats.length === 0 && <p className="chat-empty">It’s a bit quiet here.<br />{canChat ? 'Type a message below.' : role === 'viewer' ? 'Request a seat to chat.' : 'Chat is off for guests.'}</p>}
+        {chats.map((e) => {
+          const m = snap.members.find((x) => x.id === e.memberId);
           return (
-            <div key={e.seq} className={`logline ${e.kind}${e.text.startsWith('— Hand') ? ' divider' : ''}`}>
+            <div key={e.seq} className="chat-line">
+              <span className="chat-who">{m?.nickname ?? 'Someone'}</span>
+              <span className="chat-text">{e.text}</span>
               <time dateTime={new Date(e.ts).toISOString()}>{shortTime(e.ts)}</time>
-              {e.kind === 'chat' ? <span><b>{m?.nickname ?? 'Someone'}:</b> {e.text}</span> : <span>{e.text}</span>}
             </div>
           );
         })}
       </div>
-      {chatOnly && (
-        <form className="chatform" onSubmit={submit}>
-          <input id="chat-input" value={text} onChange={(e) => setText(e.target.value)} maxLength={500} placeholder={canChat ? 'Type a message…' : snap.viewer.role === 'viewer' ? 'Request a seat to chat' : 'Chat is off for guests'} disabled={!canChat} aria-label="Chat message" />
-          <button className="btn sm" disabled={!canChat || !text.trim()}>Send</button>
-        </form>
-      )}
+      <form className="chat-form" onSubmit={submit}>
+        <input id="chat-input" ref={inputRef} value={text} onChange={(e) => setText(e.target.value)} maxLength={500} autoComplete="off"
+          placeholder={canChat ? 'Your message… (press Enter)' : role === 'viewer' ? 'Request a seat to chat' : 'Chat is off for guests'} disabled={!canChat} aria-label="Chat message" />
+        <button className="chat-send" disabled={!canChat || !text.trim()} aria-label="Send message"><I.IconChat /></button>
+      </form>
     </>
+  );
+}
+
+/* ───────────── session log (full log / ledger / replayer) ───────────── */
+
+export function downloadLog(snap: Snapshot) {
+  const lines = snap.log.map((e) => `[${new Date(e.ts).toISOString()}]${e.handNo ? ` #${e.handNo}` : ''} ${e.kind === 'chat' ? `${snap.members.find((m) => m.id === e.memberId)?.nickname ?? 'Someone'}: ${e.text}` : e.text}`);
+  const blob = new Blob([`PokerThen session log — table ${snap.roomId}\n\n${lines.join('\n')}\n`], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `pokerthen-log-${new Date().toISOString().slice(0, 10)}.txt`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+export function LogModal({ snap, tab, setTab, onClose }: { snap: Snapshot; tab: 'log' | 'ledger'; setTab(t: 'log' | 'ledger'): void; onClose(): void }) {
+  const hands = useMemo(() => [...new Set(snap.log.map((e) => e.handNo).filter((n): n is number => !!n))].sort((a, b) => a - b), [snap.log]);
+  const [hand, setHand] = useState<number | 'all'>('all');
+  const box = useRef<HTMLDivElement>(null);
+  const entries = useMemo(() => snap.log.filter((e) => hand === 'all' || e.handNo === hand), [snap.log, hand]);
+  const stick = useRef(true);
+  useEffect(() => { const b = box.current; if (b && stick.current && hand === 'all') b.scrollTop = b.scrollHeight; else if (b && hand !== 'all') b.scrollTop = 0; }, [entries.length, hand, tab]);
+  const idx = hand === 'all' ? hands.length : hands.indexOf(hand);
+  const prev = idx > 0 ? hands[idx - 1] : null;
+  const next = hand !== 'all' && idx < hands.length - 1 ? hands[idx + 1] : null;
+  const nameSpan = (text: string) => {
+    // dotted underline on player names that open a line
+    const m = snap.members.slice().sort((a, b) => b.nickname.length - a.nickname.length).find((x) => text.startsWith(x.nickname + ' '));
+    return m ? <><span className="log-name">{m.nickname}</span>{text.slice(m.nickname.length)}</> : <>{text}</>;
+  };
+  return (
+    <Modal title="Session Log" onClose={onClose} wide>
+      <div className="logmodal">
+        <div className="logmodal-tabs" role="tablist">
+          <button role="tab" aria-selected={tab === 'log'} className={tab === 'log' ? 'on' : ''} onClick={() => setTab('log')}>Full log</button>
+          <button role="tab" aria-selected={tab === 'ledger'} className={tab === 'ledger' ? 'on' : ''} onClick={() => setTab('ledger')}>Ledger</button>
+          <button role="tab" aria-selected="false" disabled title="Hand replayer — coming later">Replayer</button>
+        </div>
+        {tab === 'ledger' ? <Ledger snap={snap} /> : (
+          <>
+            <div className="logmodal-box" ref={box} onScroll={(e) => { const b = e.currentTarget; stick.current = b.scrollHeight - b.scrollTop - b.clientHeight < 40; }}>
+              {entries.length === 0 && <p className="hint pad">Nothing logged yet.</p>}
+              {entries.map((e) => (
+                <div key={e.seq} className={`logline ${e.kind}${e.text.startsWith('— Hand') ? ' divider' : ''}${/ wins | collected /.test(e.text) && e.kind === 'hand' ? ' win' : ''}`}>
+                  <time dateTime={new Date(e.ts).toISOString()}>{shortTime(e.ts)}</time>
+                  {e.kind === 'chat' ? <span><b>{snap.members.find((m) => m.id === e.memberId)?.nickname ?? 'Someone'}:</b> {e.text}</span> : <span>{nameSpan(e.text)}</span>}
+                </div>
+              ))}
+            </div>
+            <div className="logmodal-foot">
+              <button className="btn" disabled={prev === null && hand !== 'all' ? true : hands.length === 0} onClick={() => setHand(prev ?? hands[hands.length - 1] ?? 'all')}>« {hand === 'all' ? (hands.length ? `Hand #${hands[hands.length - 1]}` : 'Hand') : prev !== null ? `Hand #${prev}` : 'First'}</button>
+              <button className="btn" onClick={() => setHand('all')} disabled={hand === 'all'}>{hand === 'all' ? 'All hands' : `Hand #${hand} · show all`}</button>
+              <button className="btn" disabled={next === null} onClick={() => next !== null && setHand(next)}>{next !== null ? `Hand #${next}` : 'Next'} »</button>
+              <button className="btn primary" onClick={() => downloadLog(snap)}><I.IconDownload /> Download</button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -79,28 +125,104 @@ function Ledger({ snap }: { snap: Snapshot }) {
           <tbody>
             {rows.length === 0 && <tr><td colSpan={5} className="hint">No one has sat down yet.</td></tr>}
             {rows.map((r) => (
-              <>
-                <tr key={r.memberId} className="clickable" onClick={() => setOpen(open === r.memberId ? null : r.memberId)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') setOpen(open === r.memberId ? null : r.memberId); }} aria-expanded={open === r.memberId}>
+              <Fragment key={r.memberId}>
+                <tr className="clickable" onClick={() => setOpen(open === r.memberId ? null : r.memberId)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') setOpen(open === r.memberId ? null : r.memberId); }} aria-expanded={open === r.memberId}>
                   <td>{r.nickname} <span className="mono dim">{r.memberId.slice(0, 5)}</span></td>
                   <td>{r.buyIn}</td><td>{r.buyOut}</td><td>{r.stack + r.committed}{r.committed ? <span className="dim"> ({r.committed} in pot)</span> : null}</td>
                   <td className={r.net > 0 ? 'pos' : r.net < 0 ? 'neg' : ''}>{r.net > 0 ? '+' : ''}{r.net}</td>
                 </tr>
                 {open === r.memberId && (
-                  <tr key={r.memberId + 'x'} className="detail"><td colSpan={5}>
+                  <tr className="detail"><td colSpan={5}>
                     {entries.filter((e) => e.memberId === r.memberId).map((e) => (
                       <div key={e.id}>{shortTime(e.ts)} · {label[e.type]} · {e.type === 'HOST_ADJUSTMENT' ? (e.amount > 0 ? '+' : '') + e.amount : e.amount}{e.reason ? ` (${e.reason})` : ''}{e.handNo ? ` · hand ${e.handNo}` : ''}</div>
                     ))}
                   </td></tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
           <tfoot><tr><td>Total</td><td>{tot.buyIn}</td><td>{tot.buyOut}</td><td>{tot.stack + tot.committed}</td><td className={tot.net === 0 ? 'pos' : 'neg'}>{tot.net}</td></tr></tfoot>
         </table>
       </div>
       <p className="hint pad">{tot.net === 0 ? '✓ Reconciled: every chip is accounted for.' : '⚠ Totals do not reconcile — please report this.'}</p>
-      <a className="btn sm" href={`/api/v1/rooms/${snap.roomId}/ledger.csv`} download>Download CSV</a>
-      <p className="hint pad">Hand replayer — coming in a later release.</p>
+      <a className="btn sm" href={`/api/v1/rooms/${snap.roomId}/ledger.csv`} download><I.IconDownload /> Download CSV</a>
+    </div>
+  );
+}
+
+/* ───────────── options popover ───────────── */
+
+export type OptionsAction = 'players' | 'game' | 'prefs' | 'copy' | 'fair' | 'help' | 'csv' | 'addchips' | 'backbb' | 'leave';
+
+export function OptionsMenu({ snap, fair, onPick, onClose }: { snap: Snapshot; fair: { verified: number; completed: number; failed: number }; onPick(a: OptionsAction): void; onClose(): void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const down = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node) && !(e.target as HTMLElement).closest('[data-optmenu-toggle]')) onClose(); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', down); document.addEventListener('keydown', key);
+    ref.current?.querySelector<HTMLElement>('button')?.focus();
+    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key); };
+  }, [onClose]);
+  const v = snap.viewer, isOwner = v.role === 'owner', seated = v.seat !== null;
+  const item = (a: OptionsAction, icon: ReactNode, text: ReactNode, extra?: ReactNode) => (
+    <button key={a} role="menuitem" className="optmenu-item" onClick={() => onPick(a)}><span className="optmenu-ic">{icon}</span><span className="optmenu-tx">{text}</span>{extra}</button>
+  );
+  return (
+    <div className="optmenu" role="menu" aria-label="Table options" ref={ref}>
+      <div className="optmenu-head">
+        <Avatar name={v.nickname ?? '?'} id={v.memberId} size={30} />
+        <div className="optmenu-who"><b>{v.nickname ?? 'Watching'}</b><small>{isOwner ? 'Host' : seated ? 'Seated player' : v.role === 'pending' ? 'Waiting for approval' : 'Watching'}</small></div>
+      </div>
+      {isOwner && item('players', <I.IconUsers />, 'Players & requests', snap.requests.length ? <span className="badge">{snap.requests.length}</span> : null)}
+      {item('game', <I.IconGear />, 'Game configurations')}
+      {item('prefs', <I.IconSliders />, 'Preferences')}
+      {seated && item('addchips', <I.IconPlus />, 'Add chips')}
+      {seated && item('backbb', <I.IconAway />, 'Sit out until big blind')}
+      {item('copy', <I.IconLink />, 'Copy invite link')}
+      {item('fair', <I.IconLock />, 'Fairness verification', <small className={fair.failed ? 'neg' : 'dim'}>{fair.failed ? `${fair.failed} failed` : fair.completed ? `✓ ${fair.verified}/${fair.completed}` : ''}</small>)}
+      {item('csv', <I.IconDownload />, 'Download ledger CSV')}
+      {item('help', <I.IconHelp />, 'Rules & help')}
+      {item('leave', <I.IconHome />, 'Leave table (home)')}
+    </div>
+  );
+}
+
+/* ───────────── host: join request ───────────── */
+
+export function JoinRequestModal({ req, send, onIgnore }: { req: RequestView; send: Send; onIgnore(): void }) {
+  const [stack, setStack] = useState(String(req.amount));
+  const [busy, setBusy] = useState(false);
+  const ok = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    ok.current?.focus();
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onIgnore(); };
+    document.addEventListener('keydown', key);
+    return () => document.removeEventListener('keydown', key);
+  }, [onIgnore]);
+  const decide = async (approve: boolean) => {
+    if (busy) return;
+    setBusy(true);
+    const n = Math.floor(Number(stack));
+    const r = await send({ kind: 'request.decide', requestId: req.id, approve, stack: approve && Number.isSafeInteger(n) && n > 0 ? n : undefined });
+    setBusy(false);
+    if (!r.ok) toast(r.error.message, 'error');
+    else if (approve) toast(`${req.nickname} is in.`, 'good');
+  };
+  const isSeat = req.kind === 'seat';
+  return (
+    <div className="joinreq-bg" onMouseDown={(e) => { if (e.target === e.currentTarget) onIgnore(); }}>
+      <div className="joinreq" role="dialog" aria-modal="true" aria-label="Join request">
+        <h2>The player “{req.nickname}” wants to {isSeat ? 'join the game' : 'add chips'}!</h2>
+        <div className="joinreq-box">
+          <label htmlFor="jr-stack">{isSeat ? `Intended stack (seat ${req.seat! + 1}${req.sitOut ? ', sitting out' : ''})` : 'Chips to add'}</label>
+          <input id="jr-stack" inputMode="numeric" value={stack} onChange={(e) => setStack(e.target.value.replace(/[^\d]/g, ''))} />
+        </div>
+        <div className="joinreq-btns">
+          <button className="jr-btn reject" disabled={busy} onClick={() => void decide(false)}>Reject</button>
+          <button className="jr-btn ignore" disabled={busy} onClick={onIgnore}>Ignore</button>
+          <button className="jr-btn accept" ref={ok} disabled={busy} onClick={() => void decide(true)}>Accept</button>
+        </div>
+      </div>
     </div>
   );
 }

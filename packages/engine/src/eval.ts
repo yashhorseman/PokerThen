@@ -4,6 +4,8 @@ export interface HandValue {
   /** Comparable score: higher is better. Equal score = exact tie. */
   score: number;
   category: number; // 0 high card … 8 straight flush
+  /** tie-break ranks, most significant first (2–14) */
+  tb: number[];
   name: string; // "Two Pair, Aces and Fours"
   best: Card[]; // the five cards that make the hand
 }
@@ -36,7 +38,7 @@ export function eval5(cs: Card[]): HandValue {
   else { category = 0; tb = vals; }
   let score = category;
   for (let i = 0; i < 5; i++) score = score * BASE + (tb[i] || 0);
-  return { score, category, name: describe(category, tb), best: cs.slice() };
+  return { score, category, tb, name: describe(category, tb), best: cs.slice() };
 }
 
 function describe(cat: number, tb: number[]): string {
@@ -69,3 +71,22 @@ export function bestHand(cards: Card[]): HandValue {
 }
 
 export { CAT_NAMES };
+
+const RANK_SHORT: Record<number, string> = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
+const rs = (v: number) => RANK_SHORT[v] ?? String(v);
+
+/** Short badge text shown under a player's cards while the board is revealed, e.g. "PAIR (7)", "TWO PAIR (8,2)". */
+export function handLabel(v: HandValue): string {
+  const t = v.tb;
+  switch (v.category) {
+    case 8: return t[0] === 14 ? 'ROYAL FLUSH' : `STRAIGHT FLUSH (${rs(t[0])})`;
+    case 7: return `FOUR OF A KIND (${rs(t[0])})`;
+    case 6: return `FULL HOUSE (${rs(t[0])},${rs(t[1])})`;
+    case 5: return `FLUSH (${rs(t[0])})`;
+    case 4: return `STRAIGHT (${rs(t[0])})`;
+    case 3: return `THREE OF A KIND (${rs(t[0])})`;
+    case 2: return `TWO PAIR (${rs(t[0])},${rs(t[1])})`;
+    case 1: return `PAIR (${rs(t[0])})`;
+    default: return 'HIGH CARD';
+  }
+}

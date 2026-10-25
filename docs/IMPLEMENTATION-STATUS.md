@@ -3,7 +3,7 @@
 Legend: ✅ implemented and tested · 🟡 implemented, lightly tested · ❌ not built.
 "Spec" = `Private-Poker-Build-Specification.txt`. Voice/video was explicitly excluded by the product owner.
 
-## Tests that exist (run `npm test`) — 39 passing
+## Tests that exist (run `npm test`) — 40 passing
 
 - Engine primitives: SHA-256 vs node:crypto, Merkle proofs (tamper rejection), side-pot fixtures (100/250/400 → 300+300 + refund 150; folded contributor; fold to unmatched raise), odd chips (34/33/33; 101 → 51/50), **evaluator vs an independent evaluator on 20,000 random matchups**.
 - Engine hands: heads-up order, UTG order and button movement, raise-reopening fixtures (10→30 then short all-in 42; two short all-ins reaching a full raise), min-raise tracking, short blinds, refunds, three-way all-in with rigged deck, timers/time bank/pause/resume, run-it-twice (always/ask/decline/timeout), rabbit preview, leaving mid-hand.
@@ -16,10 +16,10 @@ Legend: ✅ implemented and tested · 🟡 implemented, lightly tested · ❌ no
 | Spec area | Status |
 |---|---|
 | A1–A2 create, invite, join, seat request, approve/reject/cancel, seat conflict | ✅ |
-| A3 start / pause / stop-after-hand / next hand / end session | ✅ (immediate pause freezes the clock; hard stop randomises dealer on restart) |
+| A3 start / pause / stop-after-hand / next hand / end session / shuffle seats | ✅ (immediate pause freezes the clock; hard stop randomises dealer on restart; seats can be shuffled while stopped) |
 | A4 player management: stack add/remove/set (reason, queued), remove, transfer ownership, leave, sit out, return on BB | ✅ · delegated managers ❌ |
 | A5 playing a hand: legal actions, presets, pre-actions, showdown, show-left/right/both | ✅ |
-| B visual system, 10-seat geometry, portrait layout, accessibility basics | 🟡 (tokens, anchors and breakpoints follow the spec; no automated visual/a11y suite, reduced-motion respected, keyboard focus styles present) |
+| B visual system, 10-seat geometry, portrait layout, accessibility basics | 🟡 refined against a hands-on study of a reference table (docs/UI-REFINEMENT-PLAN.md): tokens, seat anchors, animations, hand badge, phone layout; verified in screenshots at 360–1920px; no automated visual/a11y suite |
 | C settings: blinds, ante, rabbit, run twice, showdown speed, decision limit, time bank + refill, reveal, auto-start, guest chat | ✅ · chat-in-replay, trim excess, deal-to-away, cents ❌ (shown as unavailable) |
 | C2–C3 blind levels, variants, rotation | ❌ |
 | C5 personal preferences: deck colours, chips/BB, volume, chat beep, reduced motion, run-twice pref, auto time bank | ✅ · achievements/mood/gestures/themes ❌ |

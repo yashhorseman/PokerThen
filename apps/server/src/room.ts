@@ -7,6 +7,7 @@ import type {
   ClientCommand, ErrorInfo, FairnessView, HandView, LedgerEntryView, LedgerRow, LogEntryView, PendingView, RequestView, Role, SeatView, Snapshot,
 } from '@pokerthen/protocol';
 import { PROTOCOL_VERSION, validateNickname } from '@pokerthen/protocol';
+import { randomInt } from 'node:crypto';
 import { freshDeck, randomFloat, randomId } from './util';
 
 /* ───────────── state ───────────── */
@@ -417,6 +418,15 @@ export class Room {
         return;
       }
       case 'admin.nextHand': this.eng({ type: 'NEXT_HAND' }); return;
+      case 'admin.shuffleSeats': {
+        const occ = this.t.seats.map((x, i) => (x ? i : -1)).filter((i) => i >= 0);
+        if (occ.length < 2) fail('NOT_ENOUGH_PLAYERS', 'Need at least two seated players to shuffle.');
+        const order = occ.slice();
+        for (let i = order.length - 1; i > 0; i--) { const j = randomInt(0, i + 1); [order[i], order[j]] = [order[j], order[i]]; }
+        this.eng({ type: 'SHUFFLE_SEATS', order });
+        this.log('admin', 'The host shuffled the seats.');
+        return;
+      }
       case 'admin.pause': this.eng({ type: cmd.value ? 'PAUSE' : 'RESUME' }); return;
       case 'admin.stopAfterHand': this.eng({ type: 'STOP_AFTER_HAND', value: cmd.value }); return;
       case 'admin.config': return this.adminConfig(cmd);
