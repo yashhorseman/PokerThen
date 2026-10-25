@@ -6,7 +6,15 @@ import type { Prefs } from '../prefs';
 import type { SendResult } from '../net';
 import { toast } from './ui';
 
-type PreAction = { kind: 'checkfold' } | { kind: 'call'; amount: number } | null;
+type PreAction =
+  | { kind: 'checkfold' }
+  | { kind: 'fold' }
+  | { kind: 'check' }
+  | { kind: 'call'; amount: number }
+  | null;
+
+const CANCEL_CHECK = 'The bet changed, so your pre-set check was cancelled.';
+const CANCEL_CALL = 'The bet changed, so your pre-set call was cancelled.';
 
 interface Props {
   snap: Snapshot;
@@ -18,18 +26,19 @@ interface Props {
 const isRedSuit = (card: string | null | undefined) => !!card && (card[1] === 'h' || card[1] === 'd');
 
 /** One of the three fixed action slots. Stays in place (dimmed) when it's not your turn. */
-function Slot({ kind, label, sub, hint, disabled, dim, aria, onClick }: {
+function Slot({ kind, label, sub, hint, keys, disabled, dim, aria, onClick }: {
   kind: 'raise' | 'call' | 'fold';
   label: string;
   sub?: string;
   hint?: string;
+  keys?: string;
   disabled: boolean;
   dim: boolean;
   aria: string;
   onClick(): void;
 }) {
   return (
-    <button type="button" className={`abtn abtn-${kind}${dim ? ' is-dim' : ''}`} disabled={disabled} aria-label={aria} onClick={onClick}>
+    <button type="button" className={`abtn abtn-${kind}${dim ? ' is-dim' : ''}`} disabled={disabled} aria-label={aria} aria-keyshortcuts={keys} onClick={onClick}>
       {hint && <span className="act-hint" aria-hidden="true">{hint}</span>}
       <span className="abtn-label">{label}</span>
       {sub && <span className="abtn-sub">{sub}</span>}
@@ -46,6 +55,10 @@ export function ActionArea({ snap, prefs, serverNow, send }: Props) {
   const bb = snap.room.config.bb;
   const fmt = (n: number) => fmtAmount(n, prefs, bb);
   const myTurn = !!(hand && lg && hand.phase === 'BETTING' && hand.toActSeat === mySeat);
+  const liveNow = !!hand && hand.phase === 'BETTING' && !!me && !!me.inHand && !me.folded;
+  const facingNow = hand && me ? Math.max(0, hand.currentBet - (me.street ?? 0)) : 0;
+  const callAmtNow = Math.min(facingNow, me?.stack ?? 0);
+  const canPreSelect = liveNow && !myTurn && !me?.allIn && !hand?.vote;
 
   const [busy, setBusy] = useState(false);
   const [raiseTo, setRaiseTo] = useState(0);
@@ -54,6 +67,7 @@ export function ActionArea({ snap, prefs, serverNow, send }: Props) {
   const turnKey = hand ? `${hand.id}:${hand.turnId}` : '';
   const lastKey = useRef('');
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  const keyEnterRef = useRef<(e: KeyboardEvent) => void>(() => {});
 
   // a new snapshot means the server answered: allow input again
   useEffect(() => { setBusy(false); }, [snap.version]);
@@ -89,39 +103,72 @@ export function ActionArea({ snap, prefs, serverNow, send }: Props) {
     act('fold');
   };
 
-  // pre-actions fire once when the turn arrives
+  const togglePre = (p: NonNullable<PreAction>) => setPre((cur) => (cur && cur.kind === p.kind ? null : p));
+
+  // pre-actions fire exactly once when the turn arrives
   useEffect(() => {
     if (!myTurn || !lg || !hand || lastKey.current === turnKey) return;
     lastKey.current = turnKey;
     if (!pre) return;
     const p = pre;
     setPre(null);
-    if (p.kind === 'checkfold') void run({ kind: 'action', handId: hand.id, turnId: lg.turnId, action: lg.canCheck ? 'check' : 'fold' });
-    else if (p.kind === 'call' && !lg.canCheck && lg.callAmount === p.amount) void run({ kind: 'action', handId: hand.id, turnId: lg.turnId, action: 'call' });
-    else toast('The bet changed, so your pre-set call was cancelled.', 'info');
+    const go = (action: 'fold' | 'check' | 'call') => void run({ kind: 'action', handId: hand.id, turnId: lg.turnId, action });
+    if (p.kind === 'checkfold') go(lg.canCheck ? 'check' : 'fold');
+    else if (p.kind === 'fold') go('fold');
+    else if (p.kind === 'check') { if (lg.canCheck) go('check'); else toast(CANCEL_CHECK, 'info'); }
+    else if (p.kind === 'call') { if (!lg.canCheck && lg.callAmount === p.amount) go('call'); else toast(CANCEL_CALL, 'info'); }
   }, [myTurn, turnKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!hand || hand.phase === 'COMPLETE' || me?.folded) setPre(null); }, [hand?.id, hand?.phase, me?.folded]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a pre-set check/call is dropped the moment the bet in front of you changes (the buttons would otherwise be misleading)
+  useEffect(() => {
+    if (!pre || myTurn || !liveNow) return;
+    if (pre.kind === 'check' && facingNow > 0) { setPre(null); toast(CANCEL_CHECK, 'info'); }
+    else if (pre.kind === 'call' && (facingNow === 0 || callAmtNow !== pre.amount)) { setPre(null); toast(CANCEL_CALL, 'info'); }
+  }, [facingNow, callAmtNow]); // eslint-disable-line react-hooks/exhaustive-deps
+  // cleared when the hand ends, you fold, a new hand starts, or you go all-in
+  useEffect(() => { if (!hand || hand.phase === 'COMPLETE' || me?.folded || me?.allIn) setPre(null); }, [hand?.id, hand?.phase, me?.folded, me?.allIn]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPre(null); }, [hand?.id]);
 
-  // keyboard: Esc always closes the bet panel; the rest only with the "action shortcuts" preference, never while typing or in a dialog
+  // keyboard: Esc always closes the bet panel; I / C / K / R / F / T only with the "action shortcuts" preference,
+  // never while typing, in a dialog, or with a modifier key. B / L / M / P belong to the room (TablePage).
   keyRef.current = (e: KeyboardEvent) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (document.querySelector('.modal')) return;
+    if (document.querySelector('.modal, .joinreq')) return;
     if (e.key === 'Escape') { if (panelOpen) { e.preventDefault(); setPanelOpen(false); } return; }
     const t = e.target as HTMLElement | null;
     const typing = !!t && (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable);
-    if (!prefs.shortcuts || typing || !myTurn || !lg) return;
+    if (!prefs.shortcuts || typing) return;
     const k = e.key.toLowerCase();
-    if (panelOpen) {
-      if (e.key === 'Enter' && !(t && t.tagName === 'BUTTON')) { e.preventDefault(); confirmBet(); }
-      return;
+    if (!['i', 'c', 'k', 'r', 'f', 't'].includes(k)) return;
+    if (myTurn && lg) {
+      if (panelOpen) return; // inside the bet panel only Enter / Esc are handled
+      e.preventDefault();
+      if (e.repeat || busy) return;
+      if (k === 'i') act(lg.canCheck ? 'check' : 'fold');
+      else if (k === 'c') { if (lg.canCheck) toast('Nothing to call — press K to check', 'info'); else act('call'); }
+      else if (k === 'k') { if (lg.canCheck) act('check'); else toast('You can’t check — there’s a bet to call', 'info'); }
+      else if (k === 'r') openPanel();
+      else if (k === 'f') foldNow();
+      else if (k === 't') { if (hand && !hand.bankActive && (me?.timeBankMs ?? 0) > 0) useBank(); }
+    } else if (canPreSelect) {
+      if (k === 'r' || k === 't') return;
+      e.preventDefault();
+      if (e.repeat) return;
+      if (k === 'i') togglePre({ kind: 'checkfold' });
+      else if (k === 'f') togglePre({ kind: 'fold' });
+      else if (k === 'c') { if (facingNow > 0) togglePre({ kind: 'call', amount: callAmtNow }); else toast('Nothing to call — press K to check', 'info'); }
+      else if (k === 'k') { if (facingNow === 0) togglePre({ kind: 'check' }); else toast('You can’t check — there’s a bet to call', 'info'); }
     }
-    if (k === 'c') { e.preventDefault(); if (!busy) act(lg.canCheck ? 'check' : 'call'); }
-    else if (k === 'r') { e.preventDefault(); openPanel(); }
-    else if (k === 'f') { e.preventDefault(); if (!busy) foldNow(); }
-    else if (k === 't') { e.preventDefault(); if (hand && !hand.bankActive && (me?.timeBankMs ?? 0) > 0) useBank(); }
+  };
+  // Enter confirms the bet while the panel is open (focus on the number box is handled by its own onKeyDown)
+  keyEnterRef.current = (e: KeyboardEvent) => {
+    if (!prefs.shortcuts || !myTurn || !panelOpen || e.key !== 'Enter') return;
+    const t = e.target as HTMLElement | null;
+    if (t && (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName) || t.isContentEditable)) return;
+    if (document.querySelector('.modal, .joinreq')) return;
+    e.preventDefault(); confirmBet();
   };
   useEffect(() => {
-    const h = (e: KeyboardEvent) => keyRef.current(e);
+    const h = (e: KeyboardEvent) => { keyRef.current(e); keyEnterRef.current(e); };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
   }, []);
@@ -147,7 +194,7 @@ export function ActionArea({ snap, prefs, serverNow, send }: Props) {
 
   const groups: React.ReactNode[] = [];
   const hint = (k: string) => (prefs.shortcuts ? k : undefined);
-  const inLiveHand = !!hand && hand.phase === 'BETTING' && me.inHand && !me.folded;
+  const inLiveHand = liveNow;
 
   /* ---------- run it twice vote ---------- */
   if (hand?.vote && hand.vote.mine === 'pending') {
@@ -228,7 +275,7 @@ export function ActionArea({ snap, prefs, serverNow, send }: Props) {
         if (hand.bankActive) groups.push(<div className="act-bank is-active" key="bank">EXTRA TIME ACTIVE</div>);
         else if ((me.timeBankMs ?? 0) > 0) {
           groups.push(
-            <button type="button" className="act-bank" key="bank" disabled={busy} onClick={useBank} aria-label="Use extra time">
+            <button type="button" className="act-bank" key="bank" disabled={busy} onClick={useBank} aria-label="Use extra time" aria-keyshortcuts="T">
               {hint('T') && <span className="act-hint" aria-hidden="true">T</span>}
               EXTRA TIME <span className="act-count">{Math.round((me.timeBankMs ?? 0) / 1000)}s</span>
             </button>,
@@ -237,34 +284,39 @@ export function ActionArea({ snap, prefs, serverNow, send }: Props) {
       }
       groups.push(
         <div className="act-slots" key="slots">
-          <Slot kind="raise" label={lg.isBet ? 'BET' : 'RAISE'} hint={hint('R')} disabled={busy || !lg.canRaise} dim={!lg.canRaise}
+          <Slot kind="raise" label={lg.isBet ? 'BET' : 'RAISE'} hint={hint('R')} keys="R" disabled={busy || !lg.canRaise} dim={!lg.canRaise}
             aria={lg.canRaise ? (lg.isBet ? 'Bet' : 'Raise') : 'Raise (not available)'} onClick={openPanel} />
           {lg.canCheck
-            ? <Slot kind="call" label="CHECK" hint={hint('C')} disabled={busy} dim={false} aria="Check" onClick={() => act('check')} />
-            : <Slot kind="call" label={`CALL ${fmt(toCall)}`} sub={lg.callIsAllIn ? 'ALL-IN' : undefined} hint={hint('C')} disabled={busy} dim={false}
+            ? <Slot kind="call" label="CHECK" hint={hint('K')} keys="K" disabled={busy} dim={false} aria="Check" onClick={() => act('check')} />
+            : <Slot kind="call" label={`CALL ${fmt(toCall)}`} sub={lg.callIsAllIn ? 'ALL-IN' : undefined} hint={hint('C')} keys="C" disabled={busy} dim={false}
                 aria={`Call ${toCall}${lg.callIsAllIn ? ', all-in' : ''}`} onClick={() => act('call')} />}
-          <Slot kind="fold" label="FOLD" hint={hint('F')} disabled={busy} dim={false} aria="Fold" onClick={foldNow} />
+          <Slot kind="fold" label="FOLD" hint={hint('F')} keys="F" disabled={busy} dim={false} aria="Fold" onClick={foldNow} />
         </div>,
       );
       if (!lg.canRaise && !lg.canCheck && !lg.callIsAllIn) groups.push(<div className="act-note" key="note">Betting wasn’t reopened — you can call or fold.</div>);
     }
   } else if (inLiveHand && hand && !hand.vote) {
-    /* ---------- waiting for your turn: dimmed slots + pre-actions ---------- */
-    const facing = Math.max(0, hand.currentBet - (me.street ?? 0));
-    const callAmt = Math.min(facing, me.stack ?? 0);
+    /* ---------- waiting for your turn: pre-select row + dimmed slots ---------- */
+    const facing = facingNow;
+    const callAmt = callAmtNow;
     if (!me.allIn) {
-      groups.push(
-        <div className="act-pre" key="pre" role="group" aria-label="Pre-actions">
-          <button type="button" className={`apre${pre?.kind === 'checkfold' ? ' is-armed' : ''}`} aria-pressed={pre?.kind === 'checkfold'}
-            onClick={() => setPre(pre?.kind === 'checkfold' ? null : { kind: 'checkfold' })}>
-            {pre?.kind === 'checkfold' ? '✓ ' : ''}CHECK OR FOLD
+      const pbtn = (kind: 'checkfold' | 'fold' | 'check' | 'call', label: string, key: string, onClick: () => void) => {
+        const armed = pre?.kind === kind;
+        return (
+          <button key={kind} type="button" className={`apre${armed ? ' is-armed' : ''}${kind === 'fold' ? ' apre-fold' : ''}`} aria-pressed={armed}
+            aria-keyshortcuts={key.toUpperCase()} onClick={onClick}>
+            {hint(key.toUpperCase()) && <span className="act-hint" aria-hidden="true">{key.toUpperCase()}</span>}
+            <span className="apre-tick" aria-hidden="true">{armed ? '✓' : ''}</span>{label}
           </button>
-          {facing > 0 && (
-            <button type="button" className={`apre${pre?.kind === 'call' ? ' is-armed' : ''}`} aria-pressed={pre?.kind === 'call'}
-              onClick={() => setPre(pre?.kind === 'call' ? null : { kind: 'call', amount: callAmt })}>
-              {pre?.kind === 'call' ? '✓ ' : ''}CALL {fmt(callAmt)}
-            </button>
-          )}
+        );
+      };
+      groups.push(
+        <div className="act-pre" key="pre" role="group" aria-label="Pre-select an action for your turn">
+          {pbtn('checkfold', 'CHECK OR FOLD', 'i', () => togglePre({ kind: 'checkfold' }))}
+          {facing > 0
+            ? pbtn('call', `CALL ${fmt(callAmt)}`, 'c', () => togglePre({ kind: 'call', amount: callAmt }))
+            : pbtn('check', 'CHECK', 'k', () => togglePre({ kind: 'check' }))}
+          {pbtn('fold', 'FOLD', 'f', () => togglePre({ kind: 'fold' }))}
         </div>,
       );
     }

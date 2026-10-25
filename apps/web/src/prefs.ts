@@ -9,10 +9,12 @@ export interface Prefs {
   felt: 'green' | 'purple' | 'blue' | 'burgundy';
   /** desktop seat layout: fixed numbering (same for everyone) or rotate so you sit at the bottom */
   rotate: 'fixed' | 'hero';
-  /** single-key action shortcuts (C call/check, R raise, F fold, T time bank) — off by default to avoid accidents */
+  /** single-key action shortcuts (I check/fold, C call, K check, R raise, F fold, T time bank) — on by default on desktop, off on touch devices */
   shortcuts: boolean;
 }
-const DEFAULTS: Prefs = { deck: 'two', amounts: 'chips', volume: 45, chatBeep: true, reducedMotion: 'system', felt: 'green', rotate: 'fixed', shortcuts: false };
+/** Desktop players (mouse/trackpad) get the keyboard shortcuts on by default; touch devices don't. */
+const hasFinePointer = typeof matchMedia !== 'undefined' && matchMedia('(pointer: fine)').matches;
+const DEFAULTS: Prefs = { deck: 'two', amounts: 'chips', volume: 45, chatBeep: true, reducedMotion: 'system', felt: 'green', rotate: 'fixed', shortcuts: hasFinePointer };
 const KEY = 'pt_prefs';
 
 function load(): Prefs {

@@ -178,7 +178,7 @@ tr.detail td { background: #1d1b1c; font-size: 12px; color: var(--text2); }
 
 /* ───────────────────────── Phones / portrait ───────────────────────── */
 @media (max-width: 759px), (max-width: 1099px) and (orientation: portrait) {
-  .room { --room-top: 6rem; --room-bottom: 10.5rem; }
+  .room { --room-top: 5.8rem; --room-bottom: 9.2rem; }
 
   .rail { top: calc(2.35rem + env(safe-area-inset-top)); left: calc(0.3rem + env(safe-area-inset-left)); flex-direction: row; background: none; border: 0; box-shadow: none; gap: 0.1rem; }
   .rail > .rail-btn, .rail > .rail-item { border-top: 0; }
@@ -197,9 +197,10 @@ tr.detail td { background: #1d1b1c; font-size: 12px; color: var(--text2); }
   .topright-btns { position: absolute; right: calc(0.35rem + env(safe-area-inset-right)); top: calc(0.2rem + env(safe-area-inset-top)); flex-direction: row-reverse; margin: 0; gap: 0.3rem; }
   .tr-btn { width: 2.8rem; height: 2.8rem; font-size: 1.3rem; }
 
-  .room-bl-stack { position: absolute; left: calc(0.4rem + env(safe-area-inset-left)); bottom: calc(var(--room-bottom) - 2.6rem + env(safe-area-inset-bottom)); z-index: 12; display: grid; width: 4.6rem; border: 1px solid #504d4e; border-radius: 6px; overflow: hidden; background: #2d2b2c; }
+  /* CHAT | LOG: a horizontal pair in the free band right of the icon row (top), so it can never cover the action rows or a seat */
+  .room-bl-stack { position: absolute; left: auto; bottom: auto; right: calc(0.4rem + env(safe-area-inset-right)); top: calc(3.3rem + env(safe-area-inset-top)); z-index: 12; display: grid; grid-auto-flow: column; grid-template-columns: repeat(2, 4.1rem); width: auto; border: 1px solid #504d4e; border-radius: 6px; overflow: hidden; background: #2d2b2c; }
   .bl-stack-btn { position: relative; height: 2.6rem; min-width: 44px; background: none; border: 0; color: #a9a9a9; font-weight: 800; font-size: 0.75rem; letter-spacing: 0.08em; cursor: pointer; }
-  .bl-stack-btn + .bl-stack-btn { border-top: 1px solid #504d4e; }
+  .bl-stack-btn + .bl-stack-btn { border-left: 1px solid #504d4e; }
   .bl-stack-btn:active { background: #ffffff14; color: #fff; }
   .bl-stack-btn .rail-badge { top: 0.2rem; right: 0.2rem; }
 

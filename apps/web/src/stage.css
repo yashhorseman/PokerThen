@@ -210,58 +210,72 @@ html[data-deck='four'] .card.s-c { color: #178a3c; }
 @keyframes flip-in { from { transform: perspective(40em) rotateY(90deg); opacity: 0.4; } to { transform: perspective(40em) rotateY(0); opacity: 1; } }
 html[data-motion='reduce'] .stage *, html[data-motion='reduce'] .stage *::before, html[data-motion='reduce'] .stage *::after { animation: none !important; transition: none !important; }
 
-/* ───────────────────────── Portrait: tall stadium table ───────────────────────── */
+/* ───────────────────────── Portrait (phones / portrait tablets): the table fills the space ─────────────────────────
+   No aspect lock: .stage is the whole content box of .stage-box (the room reserves only the icon row on top and
+   the action rows below). The em derives from both axes so ten seats stay legible on short phones (390×664) and tall ones. */
 @media (max-width: 759px), (max-width: 1099px) and (orientation: portrait) {
-  .stage-box { padding: var(--room-top, 4.5rem) 0 var(--room-bottom, 9.5rem); }
+  .stage-box { padding: var(--room-top, 5.8rem) 0 var(--room-bottom, 8.4rem); }
   .stage {
-    --sw: min(100cqw, calc(100cqh * 0.62)); aspect-ratio: 0.62;
-    font-size: max(7px, calc(var(--sw) * 0.036));
-    --hole-w: 2.7em; --hole-h: 3.2em; --board-w: 3.3em; --board-h: 4.2em;
+    width: 100cqw; height: 100cqh; aspect-ratio: auto;
+    font-size: max(7px, min(calc(100cqw * 0.0375), calc(100cqh * 0.03)));
+    --hole-w: 2.8em; --hole-h: 3.2em;
+    --board-w: min(14cqw, calc(100cqh * 0.105)); --board-h: calc(var(--board-w) * 1.25);
   }
-  .table3d { left: 7%; right: 7%; top: 2%; height: 92%; }
-  .table3d > div { border-radius: 36% / 15%; }
-  .table3d-felt { inset: 1.8% 3.4%; }
+  .table3d { left: 2.5%; right: 2.5%; top: 0.5%; height: 95%; }
+  .table3d > div { border-radius: 22cqw; }
+  .table3d-felt { inset: 1.2% 2.4%; border-radius: calc(22cqw - 0.9em); }
   .table-mark, .table-brand { display: none; }
-  .table-info-portrait { display: block; position: absolute; left: 50%; top: 71%; transform: translateX(-50%); text-align: center; font-size: 0.82em; color: #d6f3e3; line-height: 1.35; white-space: nowrap; z-index: 1; }
+  .table-info-portrait { display: block; position: absolute; left: 50%; top: 43.5%; transform: translateX(-50%); text-align: center; font-size: 0.72em; color: #d6f3e3; line-height: 1.35; white-space: nowrap; z-index: 1; }
   .table-info-portrait b { display: block; font-size: 1.05em; color: #eafff3; }
 
-  .pot { top: 15%; height: 2em; min-width: 5.6em; }
+  .pot { top: 20.5%; height: 1.9em; min-width: 5.2em; padding: 0 1em; }
   .pot-val { font-size: 1.15em; }
-  .side-pots { top: 11%; font-size: 0.75em; }
-  .board-wrap { top: 25%; }
-  .board { gap: 0.3em; }
-  .board-label { min-width: 3.6em; font-size: 0.7em; }
-  .results-wrap { top: 53%; width: 24em; }
-  .results { font-size: 0.85em; }
-  .center-wrap { top: 44%; width: 14.5em; z-index: 2; }
-  .center-card { padding: 0.7em 0.9em 0.8em; border-radius: 1.4em; font-size: 0.9em; }
+  .pot-total { font-size: 0.7em; right: -1.4em; }
+  .side-pots { top: 26.6%; font-size: 0.62em; }
+  .board-wrap { top: 28%; gap: 0.3em; min-height: var(--board-h); }
+  .board { gap: 0.28em; }
+  .card.board-card { font-size: calc(var(--board-w) / 3.9); }
+  .board.small .card.lg { width: calc(var(--board-w) * 0.72); height: calc(var(--board-h) * 0.72); font-size: calc(var(--board-w) * 0.72 / 3.9); }
+  .board-label { min-width: 3.4em; font-size: 0.62em; }
+  .results-wrap { top: 50%; width: 11.6em; gap: 0.35em; }
+  .results { font-size: 0.78em; padding: 0.45em 0.8em; line-height: 1.35; }
+  .center-note { font-size: 0.8em; padding: 0.22em 0.8em; }
+  .center-note.vote { top: 52%; white-space: normal; text-align: center; width: 11em; }
+  .center-wrap { top: 50%; width: 12.6em; z-index: 2; }
+  .center-card { padding: 0.65em 0.8em 0.75em; border-radius: 1.3em; font-size: 0.88em; }
   .center-card h3 { font-size: 1.2em; }
   .center-card p { font-size: 0.85em; margin-bottom: 0.35em; }
   .center-card code { display: none; }
-  .center-note.vote { top: 52%; }
 
-  .seat { width: 7.6em; height: 3.4em; z-index: 6; }
-  .seat-panel { padding: 0 0.5em 0 0.7em; gap: 0.3em; border-radius: 0.35em; }
-  .seat:not(.has-cards) .seat-panel { padding-left: 3em; }
-  .seat-name { font-size: 0.82em; } .seat-stack { font-size: 0.9em; }
-  .seat-avatar { left: 0.4em; top: 0.45em; width: 2.2em; }
+  .seat { width: 7em; height: 3em; z-index: 6; }
+  .seat.winner { z-index: 8; }
+  .seat-panel { padding: 0 0.4em 0 0.6em; gap: 0.3em; border-radius: 0.35em; }
+  .seat:not(.has-cards) .seat-panel { padding-left: 2.9em; }
+  .seat-name { font-size: 0.8em; } .seat-stack { font-size: 0.9em; }
+  .seat-avatar { left: 0.4em; top: 0.4em; width: 2.1em; }
   .seat-avatar .avatar { width: 1.7em; height: 1.7em; }
-  .seat-cards { left: 50%; top: -2.95em; transform: translateX(-50%); }
-  .seat-cards .card.hole:nth-child(2) { margin-left: -0.9em; }
-  .hand-badge { bottom: -0.55em; font-size: 0.5em; }
-  .bubble { right: auto; left: 50%; top: auto; bottom: calc(100% + 0.2em); transform: translateX(-50%); font-size: 0.8em; }
+  /* PokerNow phone: cards sit on top of the panel (overlapping only its top padding) so name and stack stay readable */
+  .seat-cards { left: 50%; top: calc(0.35em - var(--hole-h)); transform: translateX(-50%); }
+  .seat-cards .card.hole:nth-child(1) { rotate: -6deg; }
+  .seat-cards .card.hole:nth-child(2) { rotate: 4deg; margin-left: -0.8em; }
+  .hand-badge { left: auto; right: -0.5em; bottom: -0.2em; transform: none; font-size: 0.66em; padding: 0.18em 0.55em; animation-name: badge-in-p; }
+  @keyframes badge-in-p { from { opacity: 0; transform: translateY(0.4em); } to { opacity: 1; transform: none; } }
+  .bubble { right: auto; left: 50%; top: auto; bottom: calc(100% + 0.2em); transform: translateX(-50%); font-size: 0.78em; animation-name: bubble-in-p; }
   .bubble::after { left: calc(50% - 0.35em); }
-  @keyframes bubble-in { from { opacity: 0; transform: translateX(-50%) translateY(0.4em) scale(0.9); } to { opacity: 1; transform: translateX(-50%); } }
-  .seat.has-cards .bubble { bottom: calc(100% + 2.4em); }
-  .seat-tag { font-size: 0.62em; }
-  .win-pill { font-size: 0.68em; }
-  .blind-badge { right: 0.3em; }
-  .seat.empty { width: 5.6em; } .sit { letter-spacing: 0.2em; }
-  .bet { font-size: 0.9em; }
-  .dealer-btn { width: 1.9em; height: 1.9em; font-size: 0.95em; }
-}
-
-/* portrait tablets: let the stadium table be wider than a phone's */
-@media (min-width: 600px) and (max-width: 1099px) and (orientation: portrait) {
-  .stage { --sw: min(100cqw, calc(100cqh * 0.8)); aspect-ratio: 0.8; }
+  @keyframes bubble-in-p { from { opacity: 0; transform: translateX(-50%) translateY(0.4em) scale(0.9); } to { opacity: 1; transform: translateX(-50%); } }
+  .seat.has-cards .bubble { bottom: calc(100% + var(--hole-h) - 0.1em); }
+  /* crowded columns: bubbles go to the inner side (side seats) or below the panel (top row) so they never cover a neighbour */
+  .seat[data-side='left'] .bubble, .seat[data-side='left'].has-cards .bubble { left: calc(100% + 0.2em); right: auto; top: 0; bottom: auto; transform: none; animation-name: bubble-in-s; }
+  .seat[data-side='right'] .bubble, .seat[data-side='right'].has-cards .bubble { right: calc(100% + 0.2em); left: auto; top: 0; bottom: auto; transform: none; animation-name: bubble-in-s; }
+  .seat[data-side='top'] .bubble, .seat[data-side='top'].has-cards .bubble { right: calc(100% + 0.25em); left: auto; top: 0.15em; bottom: auto; transform: none; animation-name: bubble-in-s; }
+  /* bottom corner seats: the viewer's badge sits next to them, so the bubble goes below the panel */
+  .seat[data-side$='-low'] .bubble, .seat[data-side$='-low'].has-cards .bubble { left: 50%; right: auto; top: calc(100% + 0.15em); bottom: auto; transform: translateX(-50%); animation-name: bubble-in-p; }
+  .seat[data-side='left'] .bubble::after, .seat[data-side='right'] .bubble::after, .seat[data-side='top'] .bubble::after, .seat[data-side$='-low'] .bubble::after { display: none; }
+  @keyframes bubble-in-s { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: none; } }
+  .seat-tag { font-size: 0.6em; }
+  .win-pill { font-size: 0.68em; top: auto; bottom: -0.8em; right: 0.3em; }
+  .blind-badge { right: 0.3em; font-size: 0.48em; }
+  .seat.empty { width: 5.6em; height: 2.6em; } .sit { letter-spacing: 0.2em; }
+  .bet { font-size: 0.82em; }
+  .dealer-btn { width: 1.9em; height: 1.9em; font-size: 0.9em; }
 }

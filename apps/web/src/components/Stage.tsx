@@ -8,10 +8,11 @@ import { Avatar, CardBack, CardFace, copyText, toast } from './ui';
 
 /** Ten canonical seat anchors (centre, % of the stage). Landscape = the product spec / PokerNow map, fixed numbering. */
 const POS_LAND: Array<[number, number]> = [[62, 90], [38, 90], [16, 75], [9, 50], [16, 25], [38, 10], [62, 10], [84, 25], [91, 50], [84, 75]];
-/** Portrait: viewer at the bottom, then up the left column, across the top, down the right column. */
-const POS_PORT: Array<[number, number]> = [[50, 91], [17, 79], [14, 62], [14, 45], [17, 28], [50, 9], [83, 28], [86, 45], [86, 62], [83, 79]];
+/** Portrait (phones): viewer at the bottom centre, then up the left column, across the top row, down the right column.
+ *  Vertical bands of the stage: top row ≈14%, pot ≈21%, board ≈28–41%, three side rows ≈54/70/86%, viewer ≈88%. */
+const POS_PORT: Array<[number, number]> = [[50, 88], [15, 86], [15, 70], [15, 54], [17, 14], [50, 14], [83, 14], [85, 54], [85, 70], [85, 86]];
 const CENTER_LAND: [number, number] = [50, 44];
-const CENTER_PORT: [number, number] = [50, 45];
+const CENTER_PORT: [number, number] = [50, 47];
 
 const lerp = (a: [number, number], b: [number, number], t: number): [number, number] => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
@@ -86,7 +87,26 @@ export function Stage({ snap, prefs, serverNow, onSeatClick, inviteUrl }: Props)
 
   const canSit = snap.room.status === 'OPEN' && snap.viewer.seat === null && !snap.viewer.myRequest;
   const dealerPos = hand ? posOf(hand.dealerSeat) : null;
-  const dealerAt = dealerPos ? lerp(dealerPos, center, portrait ? 0.46 : 0.27) : null;
+  /** Portrait: bets sit on the inner side of side seats / below top-row seats; the dealer button hugs the panel's inner edge. */
+  const betPos = (seat: number): [number, number] => {
+    const [x, y] = posOf(seat);
+    if (!portrait) return lerp([x, y], center, 0.42);
+    if (y < 30) return [x < 40 ? x + 6 : x > 60 ? x - 6 : 68, y + 9];
+    if (y > 80) return [x < 40 ? x + 18 : x - 18, y + 3.5]; // bottom corners: in the gap between the corner seat and the viewer
+    if (x < 40) return [x + 25, y + 3.5];
+    if (x > 60) return [x - 25, y + 3.5];
+    return [50, 65]; // viewer at the bottom: above its cards, towards the pot
+  };
+  const dealerAt: [number, number] | null = dealerPos
+    ? (!portrait ? lerp(dealerPos, center, 0.27)
+      : dealerPos[1] < 30 ? [dealerPos[0] + (dealerPos[0] < 40 ? 15.5 : dealerPos[0] > 60 ? -15.5 : 19), dealerPos[1] - 3.5]
+      : dealerPos[1] > 80 && dealerPos[0] < 40 ? [dealerPos[0] + 12.5, dealerPos[1] - 5]
+      : dealerPos[1] > 80 && dealerPos[0] > 60 ? [dealerPos[0] - 12.5, dealerPos[1] - 5]
+      : dealerPos[0] < 40 ? [dealerPos[0] + 15, dealerPos[1] + 3.5]
+      : dealerPos[0] > 60 ? [dealerPos[0] - 15, dealerPos[1] + 3.5]
+      : [dealerPos[0] + 16, dealerPos[1] - 8])
+    : null;
+  const sideOf = (x: number, y: number) => (y < 30 ? 'top' : x < 40 ? (y > 80 ? 'left-low' : 'left') : x > 60 ? (y > 80 ? 'right-low' : 'right') : 'bottom');
 
   return (
     <div className="stage-box">
@@ -121,14 +141,14 @@ export function Stage({ snap, prefs, serverNow, onSeatClick, inviteUrl }: Props)
             );
           }
           return (
-            <Seat key={seat.index} seat={seat} style={style} snap={snap} win={wins.get(seat.index)} fmt={fmt} serverNow={serverNow}
+            <Seat key={seat.index} seat={seat} style={style} side={portrait ? sideOf(x, y) : undefined} snap={snap} win={wins.get(seat.index)} fmt={fmt} serverNow={serverNow}
               badge={badgeFor(seat, boards)} dealPos={dealOrder.indexOf(seat.index)} dealN={dealOrder.length} />
           );
         })}
 
         {snap.seats.map((seat) => {
           if (seat.empty || !seat.street || seat.street <= 0 || hand?.phase === 'COMPLETE') return null;
-          const [bx, by] = lerp(posOf(seat.index), center, portrait ? 0.52 : 0.42);
+          const [bx, by] = betPos(seat.index);
           return <div key={'b' + seat.index} className="bet" style={{ left: `${bx}%`, top: `${by}%` }}>{fmt(seat.street)}</div>;
         })}
 
@@ -142,8 +162,8 @@ export function Stage({ snap, prefs, serverNow, onSeatClick, inviteUrl }: Props)
 
 /* ───────────── a seat ───────────── */
 
-function Seat({ seat, style, snap, win, fmt, serverNow, badge, dealPos, dealN }: {
-  seat: SeatView; style: React.CSSProperties; snap: Snapshot; win?: number; fmt(n: number): string; serverNow: number;
+function Seat({ seat, style, side, snap, win, fmt, serverNow, badge, dealPos, dealN }: {
+  seat: SeatView; style: React.CSSProperties; side?: string; snap: Snapshot; win?: number; fmt(n: number): string; serverNow: number;
   badge: string | null; dealPos: number; dealN: number;
 }) {
   const hand = snap.hand;
@@ -193,7 +213,7 @@ function Seat({ seat, style, snap, win, fmt, serverNow, badge, dealPos, dealN }:
   const pct = left !== null && total ? Math.min(100, (left / total) * 100) : null;
 
   return (
-    <div className={cls.join(' ')} style={style}
+    <div className={cls.join(' ')} style={style} data-side={side}
       aria-label={`${seat.nickname}, seat ${seat.index + 1}, ${seat.stack} chips${tag ? ', ' + tag.text : ''}${turn ? ', their turn' : ''}${win ? `, wins ${win}` : ''}`}>
       <div className="seat-panel">
         {!cards && (
