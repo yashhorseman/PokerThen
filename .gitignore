@@ -1,10 +1,7 @@
 node_modules/
 dist/
-data/
+research/
+*.zip
 .DS_Store
-*.log
 .env
-audit-reports/
-.artifacts/
-dist-types/
-*.tsbuildinfo
+data/

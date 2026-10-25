@@ -1,33 +1,28 @@
 {
   "name": "pokerthen",
+  "version": "1.0.0",
   "private": true,
-  "version": "0.1.0",
-  "description": "PokerThen \u2014 private poker tables with a server-side, verifiable shuffle",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
-  "engines": {
-    "node": ">=22"
-  },
+  "description": "PokerThen - private play-money Texas Hold'em tables with a verifiable server-side shuffle",
+  "engines": { "node": ">=22" },
   "scripts": {
-    "dev:server": "npm run dev -w @pokerthen/server",
-    "dev:web": "npm run dev -w @pokerthen/web",
-    "build": "npm run build -w @pokerthen/web && npm run build -w @pokerthen/server",
-    "typecheck": "tsc -b packages/engine packages/protocol apps/server && npm run typecheck -w @pokerthen/web",
-    "test": "vitest run",
-    "start": "node apps/server/dist/server.cjs",
-    "package": "node scripts/package.mjs",
-    "e2e": "node e2e/smoke.cjs",
-    "deploy": "bash scripts/deploy.sh"
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "start": "node dist/app/server.cjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"test/**/*.test.ts\"",
+    "e2e": "node e2e/run.mjs"
   },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
     "@types/ws": "^8.5.13",
-    "esbuild": "^0.24.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.7.0",
-    "vitest": "^2.1.8",
-    "puppeteer-core": "^23.11.1"
+    "esbuild": "^0.25.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "ws": "^8.18.0"
   }
 }

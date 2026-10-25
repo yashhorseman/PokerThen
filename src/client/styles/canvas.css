@@ -1,0 +1,15 @@
+/* Scaling shell — see Canvas.tsx.  All other CSS uses rem (1rem = 3.2% of canvas height). */
+:root { --pn-bg: #201e1f; }
+html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: var(--pn-bg); overflow: hidden; font-family: Mulish, sans-serif; -webkit-text-size-adjust: 100%; }
+html { font-size: 16px; }
+body { display: flex; justify-content: space-between; }
+#root { width: 100%; height: 100%; }
+button, a, [role='button'], .clickable { -webkit-tap-highlight-color: transparent; }
+button:focus, a:focus, input:focus { outline: none; }
+input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+#main-container { height: 100%; width: 100%; display: flex; align-items: center; justify-content: center; }
+#canvas { aspect-ratio: 16 / 9; position: relative; display: flex; width: 100%; overflow: hidden; box-shadow: 0 0 2rem rgba(0, 0, 0, 0.34); user-select: none; -webkit-user-select: none; }
+#canvas.expanded { aspect-ratio: 1.954 / 1; }
+.portrait #canvas { aspect-ratio: 1 / 1.8; }
+@media (min-aspect-ratio: 16/9) { .landscape #canvas { width: auto; height: 100%; } }
+@media (min-aspect-ratio: 1/1.8) { .portrait #canvas { width: auto; height: 100%; } }
