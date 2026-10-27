@@ -1,0 +1,276 @@
+/*
+ * W6 - phone layout: every `.portrait` override for W5's table components and the chrome (SPEC 5.2-5.6).
+ * Loaded LAST (ARCHITECTURE 10.2). rem = 3.2% of the 1:1.8 portrait canvas. Origin of absolute offsets = canvas top-left
+ * (`.table` is a 17.4 x 28rem box at the canvas origin). Class names follow SPEC 4 (flat kebab); W5 DOM assumptions are
+ * listed in docs/status/W6.md. Dealer/straddle discs use `.dealer-position-N` (see docs/requests/w6-dealer-position-class.md).
+ */
+
+/* ---------- table, pot, board, info (5.2) ---------- */
+.portrait .table { height: 28rem; width: 17.4rem; margin: 0; position: relative; background-size: auto 28rem; background-position: 0 0; background-repeat: no-repeat; }
+.portrait .table-game-type { display: none; }
+.portrait .pt-logo-tag { display: none; }
+.portrait .table-pot-size { left: 6.7rem; top: 10.95rem; width: 3.9rem; height: 1.1rem; }
+.portrait .table-pot-size .main-value { font-size: 0.7rem; line-height: 1.1rem; }
+.portrait .table-pot-size .add-on { top: -0.35rem; height: 0.6rem; font-size: 0.35rem; line-height: 0.6rem; }
+.portrait .table-pot-size .add-on small { font-size: 0.3rem; }
+.portrait .table-cards { transform-origin: 0 0; transform: scale(0.54); top: 12.45rem; left: 2.2rem; }
+.portrait .table-cards.run-2 { top: 48.5%; left: 15%; }
+.portrait .game-infos { top: 16.5rem; width: 100%; left: 0; right: auto; align-items: center; z-index: 4; height: 2.5rem; }
+.portrait .game-infos { pointer-events: none; }
+.portrait .game-infos-owner { font-size: 0.4rem; line-height: 0.6rem; color: #d1ffe6; }
+.portrait .game-infos-blinds { font-size: 0.45rem; line-height: 0.9rem; color: #d1ffe6; }
+.portrait .game-infos-type { font-size: 0.7rem; }
+.portrait .table-warning-ctn { margin-left: 0; width: auto; border-radius: 1rem; left: 2.2rem; right: 2.2rem; top: 12.15rem; padding: 0.5rem; font-size: 0.55rem; line-height: 0.8rem; min-height: 2.8rem; }
+.portrait .lobby-warning-ctn .warning p { font-size: 0.45rem; text-align: center; }
+.portrait .waiting-players-ctn { padding: 0.3rem; }
+
+/* dealer / straddle discs: 1.2 x 1.2rem, slide .5s, second disc offset .8rem */
+.portrait .dealer-button-ctn { width: 1.2rem; height: 1.2rem; transition-duration: 0.5s; }
+.portrait .dealer-button-ctn.second { margin: 0 0 0 0.8rem; }
+
+.portrait .dealer-button-ctn.dealer-position-1 { top: 23rem; left: 6.2rem; right: auto; bottom: auto; }
+.portrait .dealer-button-ctn.dealer-position-2 { top: 22.4rem; left: 5.2rem; right: auto; bottom: auto; }
+.portrait .dealer-button-ctn.dealer-position-3 { top: 17.9rem; left: 5.2rem; right: auto; bottom: auto; }
+.portrait .dealer-button-ctn.dealer-position-4 { top: 10.1rem; left: 5.2rem; right: auto; bottom: auto; }
+.portrait .dealer-button-ctn.dealer-position-5 { top: 4.9rem; left: 5.2rem; right: auto; bottom: auto; }
+.portrait .dealer-button-ctn.dealer-position-6 { top: 3.9rem; left: 6.2rem; right: auto; bottom: auto; }
+.portrait .dealer-button-ctn.dealer-position-7 { top: 4.9rem; left: 10.9rem; right: auto; bottom: auto; }
+.portrait .dealer-button-ctn.dealer-position-8 { top: 10.1rem; left: 10.9rem; right: auto; bottom: auto; }
+.portrait .dealer-button-ctn.dealer-position-9 { top: 17.9rem; left: 10.9rem; right: auto; bottom: auto; }
+.portrait .dealer-button-ctn.dealer-position-10 { top: 22.4rem; left: 10.9rem; right: auto; bottom: auto; }
+
+/* ---------- seat anchors (5.3) ---------- */
+.portrait .table-player { width: 5rem; height: 3.95rem; }
+.portrait .table-player.table-player-1 { top: 24rem; left: 6.2rem; right: auto; }
+.portrait .table-player.table-player-2 { top: 20rem; left: 0.1rem; right: auto; }
+.portrait .table-player.table-player-3 { top: 15.5rem; left: 0.1rem; right: auto; }
+.portrait .table-player.table-player-4 { top: 7.7rem; left: 0.1rem; right: auto; }
+.portrait .table-player.table-player-5 { top: 3rem; left: 0.1rem; right: auto; }
+.portrait .table-player.table-player-6 { top: 0rem; left: 6.2rem; right: auto; }
+.portrait .table-player.table-player-7 { top: 3rem; right: 0.1rem; left: auto; }
+.portrait .table-player.table-player-8 { top: 7.7rem; right: 0.1rem; left: auto; }
+.portrait .table-player.table-player-9 { top: 15.5rem; right: 0.1rem; left: auto; }
+.portrait .table-player.table-player-10 { top: 20rem; right: 0.1rem; left: auto; }
+/* empty seat keeps content-box + 1px dashed border (114.3 x 90.7 incl. border @390) */
+.portrait .table-player.empty { width: calc(5rem + 2px); height: calc(3.95rem + 2px); }
+.portrait .table-player-seat { border: 1px dashed rgba(255, 255, 255, 0.3); }
+.portrait .table-player-seat .table-player-seat-position-number { font-size: 0.5rem; color: rgba(255, 255, 255, 0.5); }
+.portrait .table-player-seat:hover .table-player-seat-position-number { color: #fff; }
+.portrait .table-player-seat .table-player-seat-button { font-size: 0.5rem; letter-spacing: 0.2rem; text-transform: uppercase; color: #fff; }
+
+/* ---------- occupied seat anatomy (5.4) ---------- */
+.portrait .table-player-infos-ctn { left: 0; right: 0; top: auto; bottom: 0; height: 1.9rem; background: #333; z-index: 4; box-shadow: 0 0 0.5em rgba(0, 0, 0, 0.25); }
+.portrait .table-player-name { left: 0.5rem; top: 0.38rem; width: auto; max-width: 4.4rem; height: 0.5rem; font-size: 0.5rem; line-height: 0.5rem; background: #333; z-index: 2; }
+.portrait .table-player-stack { left: 0.5rem; top: 0.9rem; width: max-content; font-size: 0.5rem; line-height: 0.8rem; background: #333; }
+.portrait .player-avatar-image-ctn { display: none; }
+.portrait .table-player-cards { transform: scale(0.72); transform-origin: 0 0; left: 0.4rem; top: 0.1rem; }
+.portrait .table-player-bet-value { font-size: 0.6rem; right: auto; bottom: auto; }
+.portrait .table-player-7 .table-player-bet-value,
+.portrait .table-player-8 .table-player-bet-value,
+.portrait .table-player-9 .table-player-bet-value,
+.portrait .table-player-10 .table-player-bet-value { right: 100%; left: auto; }
+.portrait .table-player-8 .table-player-bet-value,
+.portrait .table-player-9 .table-player-bet-value,
+.portrait .table-player-10 .table-player-bet-value { top: 1.1rem; }
+.portrait .table-player-7 .table-player-bet-value { top: 3.24rem; }
+.portrait .table-player-2 .table-player-bet-value,
+.portrait .table-player-3 .table-player-bet-value,
+.portrait .table-player-4 .table-player-bet-value { left: 95%; right: auto; top: 1.1rem; }
+.portrait .table-player-5 .table-player-bet-value { left: 95%; right: auto; top: 3.24rem; }
+.portrait .table-player-6 .table-player-bet-value { top: 4.15rem; left: 20%; right: auto; }
+.portrait .table-player-1 .table-player-bet-value { top: -1.43rem; left: 20%; right: auto; }
+
+/* glow + white plate (lavender 3em per C3; winner keeps #e9ff63) */
+.portrait .decision-current { background: #fff; }
+.portrait .decision-current .table-player-name,
+.portrait .decision-current .table-player-stack { background: #fff; }
+.portrait .decision-current::before { animation-name: pt-glow-current-portrait; }
+@keyframes pt-glow-current-portrait { from { box-shadow: 0 0 0 0 #c3bfff; } to { box-shadow: 0 0 3em 0 #c3bfff; } }
+.portrait .winner { background: #fff; }
+.portrait .winner .table-player-name,
+.portrait .winner .table-player-stack { background: #fff; }
+.portrait .time-to-talk { width: 5rem; height: 0.15rem; left: 0; right: auto; }
+.portrait .table-player-status-icon { width: 2.3rem; height: 2rem; top: 0.51rem; font-size: 0.3rem; background: rgba(0, 0, 0, 0.72); border-radius: 0.3rem; }
+.portrait .table-player-status-icon.fold { display: none; }
+/* hand chip: --size .7rem => font .35rem, line-height .525rem (11.8px @390), padding .14rem, radius .14rem, min-width 1.75rem (live CSS numbers, measured 39.3 x 11.8) */
+.portrait .player-hand-message-ctn { right: 0; left: auto; top: 1.86rem; max-width: 100%; min-width: 1.75rem; font-size: 0.35rem; line-height: 0.525rem; padding: 0 0.14rem; border-radius: 0.14rem; box-shadow: 0 0 0.14rem 0 rgba(0, 0, 0, 0.5); white-space: nowrap; }
+.portrait .player-hand-message-ctn.two-runs { top: 1.76rem; font-size: 0.294rem; padding: 0; height: auto; display: flex; flex-direction: column; overflow: hidden; }
+.portrait .player-hand-message-ctn.two-runs .hand-message-row { position: relative; justify-content: flex-start; gap: 0; height: 0.42rem; line-height: 0.42rem; padding: 0 0.14rem 0 0.56rem; }
+.portrait .player-hand-message-ctn.two-runs .hand-message-row:nth-child(2) { background: #d82525; }
+.portrait .player-hand-message-ctn.two-runs .hand-message-row.active { background: #6d64e0; font-weight: 700; }
+.portrait .player-hand-message-ctn.two-runs .run-tag { position: absolute; left: 0; top: 0.0385rem; width: 0.49rem; padding: 0; border-radius: 0; background: none !important; opacity: 0.2; font-size: 0.35rem; line-height: normal; text-align: left; }
+/* equity pill (live CSS): scale .72 about the centre, top -.5rem (seat 6: 0), left 3.4rem => x = seat + 82.4px @390 (right-column pills stay on screen) */
+.portrait .win-odds-container { transform: scale(0.72); transform-origin: 50% 50%; top: -0.5rem; left: 3.4rem; }
+.portrait .table-player-6 .win-odds-container { top: 0; }
+.portrait .player-table-signals-container { transform: scale(0.75); transform-origin: 0 0; }
+.portrait .player-table-signals-container.top,
+.portrait .emoji-picker-button,
+.portrait .emoji-container,
+.portrait .spectators-count-ctn,
+.portrait .help-link-game,
+.portrait .version-link-in-game,
+.portrait .chat-expand-button,
+.portrait .landscape-warning { display: none !important; }
+.portrait .table-player-chat-message { font-size: 0.45rem; border-radius: 0.2rem; z-index: 100; }
+
+/* ---------- chrome (5.5) ---------- */
+.portrait .top-buttons { top: 0.3rem; left: 0.3rem; width: auto; display: flex; flex-direction: row; transform: scale(0.8); transform-origin: 0 0; }
+.portrait .top-buttons > .top-buttons-button { width: 2.4rem; height: 2.8rem; border: 0; border-radius: 0; background: transparent; color: #fff; }
+.portrait .top-buttons > .top-buttons-button.im-back { color: #b9b9b9; }
+.portrait .top-buttons-label { font-size: 0.35rem; }
+.portrait .pt-tip { display: none; }
+.portrait .top-right-buttons { top: 0.2rem; right: 0.1rem; transform: scale(0.65); transform-origin: 100% 0; }
+.portrait .aux-chat-bottom-buttons-ctn {
+  position: absolute; z-index: 3;
+  left: 0.2rem; top: 25rem; width: 3.7rem; height: 2.65rem; box-sizing: content-box !important;
+  border: 0.05rem solid #787878; border-radius: 0.25rem; display: flex; flex-direction: column;
+  -webkit-backdrop-filter: blur(0.2rem); backdrop-filter: blur(0.2rem); font-size: 0.4rem;
+}
+.portrait .aux-chat-bottom-buttons-ctn > * { flex: none; margin: 0; box-sizing: border-box; width: 100%; }
+.portrait .aux-chat-bottom-buttons-ctn > :first-child { height: 1.35rem; }
+.portrait .aux-chat-bottom-buttons-ctn > .chat-button { height: 1.35rem; }
+.portrait .aux-chat-bottom-buttons-ctn > :not(.chat-button):last-child { height: 1.3rem; }
+.portrait .full-screen-button { top: auto; left: auto; bottom: 5.5rem; right: 0.2rem; transform: scale(0.78); transform-origin: 100% 100%; }
+.portrait .next-hand-button { width: 5.5rem; margin-left: -2.75rem; top: 19rem; left: 50%; }
+.portrait .next-hand-button::before, .portrait .button-1.with-tip::before { display: none; }
+
+/* options popover opens downward, arrow top-left (inside the scaled .top-buttons) */
+.portrait .top-controls-options-popover { top: 2.9rem; left: 0; right: auto; bottom: auto; min-width: 7rem; margin: 0; transform: none; }
+.portrait .options-notice-popover { width: 9rem; top: 2.9rem; left: 0; font-size: 0.5rem; }
+
+/* ---------- modals, sheets (5.6) ---------- */
+@media (max-width: 600px) {
+  .pn-text-display { font-size: var(--pn-text-xl); line-height: 1.15; }
+  .pn-subnav { gap: var(--pn-space-2); }
+  .pn-modal, .pn-modal--sm, .pn-modal--lg, .pn-modal--xl { width: 100%; max-width: none; height: 100%; max-height: none; border-radius: 0; }
+  .pn-modal.pn-modal--floating { width: calc(100% - 2 * var(--pn-space-3)); height: auto; max-height: calc(100% - 2 * var(--pn-space-5)); border-radius: var(--pn-radius-md); }
+}
+.portrait .modal { margin: 0.5rem; width: 100%; height: initial; }
+.portrait .modal-body { height: 27rem; }
+.portrait .log-modal { height: 95%; }
+/* chat bottom sheet hooks for W7 */
+.portrait .chat .overflow-black { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 100; }
+.portrait .chat-container { width: 100%; height: 15rem; font-size: 0.7rem; box-shadow: 0 0 3rem rgba(0, 0, 0, 0.6); padding-bottom: 2.6rem; z-index: 101; left: 0; bottom: 0; border-radius: 0; }
+.portrait .chat-container.has-banner { height: 17rem; }
+.portrait .chat-new-message-form { height: auto; bottom: 0; z-index: 102; }
+.portrait .chat-new-message-form input { height: 1.3rem; font-size: 0.8rem; }
+.portrait .new-messages-chat { font-size: 0.6rem; bottom: 3.5rem; right: 0.5rem; }
+
+/* INTEGRATION: the status glyph was desktop-sized (1.6rem) inside the 2.3x2rem phone status box and covered name+stack */
+.portrait .status-glyph { font-size: 0.9rem; }
+.portrait .status-caption { font-size: 0.3rem; line-height: 0.36rem; margin-top: 0.05rem; max-width: 2.2rem; }
+
+/* B2: TableScreen mounts <LogButton/> as a sibling of ChatDock (not inside the stack), so place it over the stack's second row.
+   Stack = left .2rem, top 25rem, .05rem border, rows 1.35 + 1.3rem, inner width 3.7rem. */
+.portrait .pt-log-button { position: absolute; left: 0.25rem; top: 26.4rem; width: 3.7rem; height: 1.3rem; z-index: 4; box-sizing: border-box; margin: 0; display: flex; align-items: center; justify-content: center; }
+
+/* B2: the status box sits ABOVE the plate (live still phone-seated-wait.png: box 4.04 x 1.54rem, bottom edge on the plate's top edge,
+   left-aligned with the seat, clock icon + caption side by side). It lives inside the plate in the DOM, so anchor it to the plate's top.
+   Fold status is not drawn on phone (SPEC 5.4; the `.fold` class selector never matched our markup). */
+.portrait .table-player-status-icon { left: 0; top: auto; bottom: 100%; width: 4.04rem; height: 1.54rem; flex-direction: row; gap: 0.3rem; border-radius: 0.3rem 0.3rem 0 0; z-index: 0; }
+.portrait .status-glyph { font-size: 0.9rem; flex: none; }
+.portrait .status-caption { margin-top: 0; text-align: left; font-size: 0.32rem; line-height: 0.4rem; max-width: 2.4rem; }
+.portrait .table-player.folded .table-player-status-icon { display: none; }
+
+/* B2: owner's Shuffle Seats / Start Game (table/Chrome.tsx `.pt-start-buttons`) took the desktop size on phone (text clipped at 390).
+   Same slot and size rules as the action bar (SPEC 5.5 `left:.2rem; right:.2rem; bottom:.4rem`, 6.1 phone button rules). */
+.portrait .pt-start-buttons { left: 0.2rem; right: 0.2rem; bottom: 0.4rem; gap: 0.2rem; }
+.portrait .pt-start-buttons .action-button { flex: 1; font-size: 0.5rem; height: 2.3rem; line-height: 2.3rem; padding: 0 0.3rem; }
+
+/* B2: options popover buttons (live still phone-options-seated.png + live CSS numbers): white popover, padding .7rem, width auto, min-width 7rem;
+   outlined buttons, text #4d4d4d mixed case .7rem, 1.4rem tall, left padding 1.3rem (icon slot; own icons are not drawn here), .1rem gap.
+   menus.css drew green filled uppercase buttons. */
+.portrait .top-controls-options-popover { width: auto; min-width: 7rem; padding: 0.7rem; gap: 0; }
+.portrait .top-controls-options-popover .pt-opt { height: 1.4rem; margin-bottom: 0.1rem; background: transparent; color: #4d4d4d; border: 0.08rem solid #4d4d4d; border-bottom-width: 0.15rem; border-radius: 0.3rem; font-size: 0.7rem; line-height: 1.3rem; width: 100%; white-space: nowrap; padding: 0 0.5rem 0 1.3rem; text-align: left; justify-content: flex-start; text-transform: none; box-sizing: border-box; }
+.portrait .top-controls-options-popover .pt-opt:last-child { margin-bottom: 0; }
+
+/* B2: alert cards on phone (live CSS `.portrait .alert-1 {font-size:.8rem; padding:.4rem; width:95%}`; still phone-leave-seat-dialog.png:
+   dialog 370 wide, grey content box padding .5/.7rem, buttons 2.5rem tall). core/ui drew a 342 px card with 14 px text. */
+.portrait .alert-1 { font-size: 0.8rem; padding: 0.4rem; width: 95%; border-radius: 0.5rem; box-shadow: 0 0 3rem 0.1rem #000; }
+.portrait .alert-1 .alert-1-message { background: #efefef; padding: 0.5rem 0.7rem; margin-bottom: 0.5rem; border-radius: 0.3rem; line-height: normal; }
+.portrait .alert-1 .alert-1-buttons { gap: 0.4rem; margin-top: 0; }
+.portrait .alert-1 .alert-1-buttons .button-1 { font-size: 0.8rem; height: 2.5rem; padding: 0 0.85rem; }
+
+/* B2: show-hand group, phone (live CSS numbers + stills m1_dave_showbtn/rit): group outline #139249 (.056rem, bottom .105rem, radius .21rem),
+   segments transparent with green #38bd70 text, thin #139249 dividers (.042rem); `.active` (card already shown) would be filled #39af6b + white
+   (needs the VM to keep already-shown cards in the list, see docs/requests/b2-core-showhand-runout.md). Suit glyphs are not coloured. */
+.portrait .show-hand-buttons { --show-hand-button: 0.7rem; display: flex; flex-direction: row; gap: 0; width: auto; height: auto; box-sizing: border-box; border: 0.056rem solid #139249; border-bottom-width: 0.105rem; border-radius: 0.21rem; overflow: hidden; }
+.portrait .show-hand-buttons .show-hand-button { border: 0; border-radius: 0; background: transparent; color: #38bd70; flex: 1; height: 2rem; line-height: 2rem; padding: 0.15rem 0 0; font-size: 0.49rem; text-transform: uppercase; }
+.portrait .show-hand-buttons .show-all { flex: none; width: auto; padding: 0.15rem 0.8rem 0; border-right: 0.042rem solid #139249; }
+.portrait .show-hand-buttons .show-hand-cards { display: flex; gap: 0; flex: none; }
+.portrait .show-hand-buttons .show-card { flex: none; width: 2.1rem; padding: 0.15rem 0 0; border-right: 0.042rem solid #139249; text-transform: none; color: #38bd70; }
+.portrait .show-hand-buttons .show-card:last-child { border-right: 0; border-radius: 0; }
+.portrait .show-hand-buttons .show-card.suit-h, .portrait .show-hand-buttons .show-card.suit-d { color: #38bd70; }
+.portrait .show-hand-buttons .show-hand-button.active { background: #39af6b; color: #fff; }
+
+/* B2: centre message + rabbit message (live CSS: `.portrait .room-owner-paused {top:19.65rem; font-size:.6rem; max-width:13.5rem; left:2rem}`,
+   `.room-owner-paused.rh-message {top:15rem; font-size:.5rem}`; measured 303 x 17 at (44.9,512.4)). The old .5rem / 15.8rem / .4rem values were guesses. */
+.portrait .room-owner-paused { top: 19.65rem; font-size: 0.6rem; max-width: 13.5rem; left: 2rem; width: 100%; }
+.portrait .room-owner-paused.rh-message { top: 15rem; font-size: 0.5rem; }
+
+/* B2: winner prize chip (live CSS: inline, font inherits the .5rem stack, margin-left .1rem, padding 0 .15rem; measured 40.4 x 18) */
+.portrait .table-player-stack-prize { font-size: inherit; margin-left: 0.1rem; padding: 0 0.15rem; border-radius: 0.15rem; line-height: 0.8rem; }
+
+/* B2: chat bubble (live CSS): right edge on the seat's right edge, .55rem below the seat, .45rem text, padding .2/.5rem, tail up at right .3rem */
+.portrait .table-player-chat-message { top: auto; left: auto; right: 0; bottom: -0.55rem; margin: 0; max-width: none; min-width: 20%; box-sizing: border-box; padding: 0.2rem 0.5rem; text-align: center; font-size: 0.45rem; line-height: normal; font-weight: 400; box-shadow: 0 0 0.3rem 0 rgba(0, 0, 0, 0.4); }
+.portrait .table-player-chat-tail { left: auto; right: 0.3rem; bottom: calc(100% - 0.05rem); border: 0.4rem solid transparent; border-top-width: 0; border-bottom-color: #546eca; }
+
+/* B2: reveal bar on phone: no hotkey badge; eye sits just left of the label (live CSS: left 50%, margin-left -2.2rem, opacity .3) */
+.portrait .reveal-tip { display: none; }
+.portrait .reveal-eye { left: calc(50% - 2.2rem); top: 0.05rem; opacity: 0.3; font-size: 0.75rem; }
+
+/* B2: chat sheet (live CSS: content-box 15rem + 2.6rem bottom padding (17rem + 2.6rem = 440 px with the promo strip); form padding .6rem, borderless 1.3rem input, red dot .4rem in the top-right corner) */
+.portrait .chat .chat-container { box-sizing: content-box; height: 15rem; }
+.portrait .chat .chat-container.has-banner { height: 17rem; }
+.portrait .chat .chat-new-message-form { padding: 0.6rem; box-sizing: border-box; border-radius: 0.3rem; background: #fff; display: block; }
+.portrait .chat .chat-new-message-form input { width: 100%; height: 1.3rem; border: 0; border-radius: 0; background: transparent; padding: 0; font-size: 0.8rem; color: #000; }
+.portrait .chat .chat-new-message-form .chat-recording-dot { position: absolute; top: 0; right: 0; left: auto; margin: 0; width: 1.2rem; height: 1.2rem; background: transparent; border: 0; border-radius: 0; padding: 0; }
+.portrait .chat .chat-new-message-form .chat-recording-dot::before { content: ""; position: absolute; top: 0.4rem; left: 0.4rem; width: 0.4rem; height: 0.4rem; border-radius: 50%; background: #d0021b; }
+
+/* B2: chat rows on the phone sheet (live CSS): balloon margin-left 3.5rem (#292929, radius .2rem, padding .05/.2rem, time line inside),
+   author cell absolutely at the bottom-left (3.7rem wide, #353535, right-aligned), always-visible Mute button bottom-right. */
+.portrait .chat .chat-messages-container { padding: 0.2rem; }
+.portrait .chat .chat-message-container { display: block; position: relative; margin: 0 0 0.15rem; min-height: 0; font-size: 0.7rem; }
+.portrait .chat .chat-message-container:last-child { margin-bottom: 0; }
+.portrait .chat .chat-message-container.highlight { background: transparent; }
+.portrait .chat .pt-chat-balloon { margin-left: 3.5rem; border: 0.03rem solid #292929; padding: 0.05rem 0.2rem 1.065rem; border-radius: 0.2rem; font-size: 0.7rem; position: relative; z-index: 2; white-space: pre-line; }
+.portrait .chat .chat-message-container.highlight .pt-chat-balloon { color: #fff; border-color: #1e1e1e; }
+.portrait .chat .pt-chat-author { position: absolute; left: 0; bottom: 0; width: 3.7rem; box-sizing: border-box; padding: 0.1rem 0.4rem 0.1rem 0.1rem; text-align: right; border-radius: 0.2rem 0 0 0.2rem; font-size: 0.7rem; z-index: 1; }
+.portrait .chat .pt-chat-time { position: absolute; left: 3.7rem; bottom: 0.15rem; z-index: 3; font-size: 0.49rem; padding-left: 0; }
+.portrait .chat .pt-chat-mute { display: block; position: absolute; right: 0.1rem; bottom: 0.1rem; z-index: 3; top: auto; background: transparent; color: #676767; border: 0.05rem solid #414141; border-radius: 0.15rem; font-size: 0.55rem; padding: 0.1rem 0.4rem; }
+
+/* B2: sit popover (live CSS, seat-relative; replaces the old guesses incl. the U-L3 anchor for seats 9/10):
+   12rem wide scaled .95 from its top-left (=256 px @390), inputs 2.2rem, button 2rem, arrow = per-seat triangle. */
+.portrait .request-ingress-popover { position: absolute; z-index: 99; width: 12rem; transform-origin: 0 0; transform: scale(0.95); bottom: 4.2rem; top: auto; left: auto; right: auto; padding: 0.9rem; border-radius: 0.5rem; box-shadow: rgba(0, 0, 0, 0.45) 0 0 1.6rem 0.2rem; font-size: 0.6rem; }
+.portrait .request-ingress-popover label { font-size: 0.6rem; }
+.portrait .request-ingress-popover input[type="text"] { height: 2.2rem; font-size: 0.8rem; }
+.portrait .request-ingress-popover .pt-check input { width: 1.3rem; height: 1.3rem; }
+.portrait .request-ingress-popover .pt-sit-submit { height: 2rem; font-size: 0.65rem; }
+.portrait .table-player-1 .request-ingress-popover { left: auto; right: -3.7rem; bottom: 3.4rem; top: auto; }
+.portrait .table-player-2 .request-ingress-popover, .portrait .table-player-3 .request-ingress-popover { left: auto; top: auto; bottom: -1rem; right: -12.5rem; }
+.portrait .table-player-4 .request-ingress-popover, .portrait .table-player-5 .request-ingress-popover { left: auto; top: 0; bottom: auto; right: -12.5rem; }
+.portrait .table-player-6 .request-ingress-popover { left: auto; bottom: auto; top: 4rem; right: -3.5rem; }
+.portrait .table-player-7 .request-ingress-popover, .portrait .table-player-8 .request-ingress-popover { left: -12rem; right: auto; bottom: auto; top: 0; }
+.portrait .table-player-9 .request-ingress-popover, .portrait .table-player-10 .request-ingress-popover { left: -12rem; right: auto; bottom: -1rem; top: auto; }
+/* arrow (live :before triangle, 1.6rem wide, apex towards the seat) */
+.portrait .request-ingress-popover > .popover-arrow { display: block; position: absolute; width: 0; height: 0; margin: 0 -0.8rem 0 0; border: 0.8rem solid transparent; border-top-color: #fff; background: transparent; bottom: -1.55rem; right: 6rem; left: auto; top: auto; transform: none; }
+.portrait .table-player-2 .request-ingress-popover > .popover-arrow, .portrait .table-player-3 .request-ingress-popover > .popover-arrow { bottom: 1.6rem; right: auto; left: -1.55rem; top: auto; transform: rotate(90deg); }
+.portrait .table-player-4 .request-ingress-popover > .popover-arrow, .portrait .table-player-5 .request-ingress-popover > .popover-arrow { top: 1.2rem; bottom: auto; right: auto; left: -1.55rem; transform: rotate(90deg); }
+.portrait .table-player-6 .request-ingress-popover > .popover-arrow { top: -1.5rem; bottom: auto; right: 5.8rem; transform: rotate(180deg); }
+.portrait .table-player-7 .request-ingress-popover > .popover-arrow, .portrait .table-player-8 .request-ingress-popover > .popover-arrow { top: 0.9rem; bottom: auto; right: -0.75rem; transform: rotate(270deg); }
+.portrait .table-player-9 .request-ingress-popover > .popover-arrow, .portrait .table-player-10 .request-ingress-popover > .popover-arrow { top: auto; bottom: 1.55rem; right: -0.75rem; transform: rotate(270deg); }
+
+/* B2: terms bar on phone: 3.0rem tall like the live bar (text .55rem fits two lines; at .7rem it wrapped to 3 lines and covered 13 px of the table) */
+.portrait .tos-agreement { font-size: 0.55rem; }
+/* B2: vertical rhythm of the sit form tuned to the still phone-sit-form-filled.png (+-2 px; paddings are not in the live CSS excerpts) */
+.portrait .request-ingress-popover { padding-top: 1rem; }
+.portrait .request-ingress-popover label { margin-bottom: 0.25rem; }
+.portrait .request-ingress-popover .form-1-input-control { margin-bottom: 1.02em; }
+.portrait .request-ingress-popover .pt-check { margin: 0.4rem 0 0.23rem; }
+
+/* B2: ledger columns overflowed the card at 360 wide (Net clipped). Let the name column shrink, columns size to content. */
+.portrait .pt-ledger-grid { grid-template-columns: minmax(0, 1fr) auto repeat(4, minmax(1.7rem, auto)); gap: 0.2rem; }
+.portrait .pt-ledger-row { padding: 0.4rem 0.3rem; }
+.portrait .pt-ledger-head { padding: 0.3rem 0.3rem; }
+.portrait .pt-ledger-total { padding: 0.4rem 0.3rem; }
+.portrait .pt-ledger-name { min-width: 0; overflow-wrap: anywhere; }

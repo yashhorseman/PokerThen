@@ -1,40 +1,32 @@
-import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { startServer } from './server';
+import { engine } from "@pokerthen/engine";
+import { startApp, cryptoEntropy } from "./app.js";
+import { loadFixedDecks } from "./devEntropy.js";
+import { loadEnv } from "./env.js";
 
-async function main() {
-  const isAzure = !!process.env.WEBSITE_SITE_NAME;
-  // Azure App Service (Linux) keeps /home across restarts and deployments
-  const dataDir = resolve(process.env.DATA_DIR ?? (isAzure ? '/home/data' : join(process.cwd(), 'data')));
-  mkdirSync(dataDir, { recursive: true });
+/** Bootstrap: PORT (all interfaces), DATA_DIR, SESSION_SECRET (required in production). Graceful SIGTERM. */
+const env = loadEnv();
+const entropy = env.devFixedDecks ? loadFixedDecks(env.devFixedDecks) : cryptoEntropy;
+if (env.devFixedDecks) console.warn(`[dev] DEV_FIXED_DECKS active: ${env.devFixedDecks}`);
+else if (process.env.DEV_FIXED_DECKS) console.warn("[boot] DEV_FIXED_DECKS ignored in production");
 
-  /** Session/deck-encryption secret: from env, else generated once and kept in the data dir. */
-  const secret = (): string => {
-    if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 24) return process.env.SESSION_SECRET;
-    const f = join(dataDir, '.secret');
-    if (existsSync(f)) return readFileSync(f, 'utf8').trim();
-    const s = randomBytes(32).toString('hex');
-    writeFileSync(f, s, { mode: 0o600 });
-    return s;
+async function main(): Promise<void> {
+  const app = await startApp({ env, engine, entropy });
+  console.log(`pokerthen listening on ${app.port} (data: ${env.dataDir})`);
+
+  let stopping = false;
+  const stop = (sig: string): void => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`[shutdown] ${sig}: flushing and closing`);
+    const t = setTimeout(() => process.exit(0), 5000);
+    t.unref();
+    app.close().then(() => process.exit(0), () => process.exit(1));
   };
-
-  const here = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
-  const candidates = [process.env.STATIC_DIR, join(here, 'public'), join(process.cwd(), 'public'), join(process.cwd(), 'apps/web/dist')];
-  const staticDir = candidates.find((p): p is string => !!p && existsSync(join(p, 'index.html')));
-
-  const running = await startServer({
-    port: Number(process.env.PORT ?? process.env.WEBSITES_PORT ?? 8787),
-    dataDir,
-    secret: secret(),
-    staticDir,
-    secureCookies: process.env.SECURE_COOKIES ? process.env.SECURE_COOKIES === '1' : isAzure,
-    allowedOrigins: (process.env.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
-  });
-
-  const stop = async () => { await running.close(); process.exit(0); };
-  process.on('SIGTERM', stop);
-  process.on('SIGINT', stop);
+  process.on("SIGTERM", () => stop("SIGTERM"));
+  process.on("SIGINT", () => stop("SIGINT"));
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+process.on("unhandledRejection", (e) => console.error("[unhandledRejection]", e));
+process.on("uncaughtException", (e) => console.error("[uncaughtException]", e));
+
+main().catch((e) => { console.error("[fatal]", e); process.exit(1); });

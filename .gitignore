@@ -1,10 +1,11 @@
 node_modules/
-dist/
-data/
+research/evidence/
+research/.hostlock/
+research-scratch/
 .DS_Store
 *.log
-.env
-audit-reports/
-.artifacts/
-dist-types/
+dist/
+app.zip
+.tsbuild/
 *.tsbuildinfo
+.DS_Store

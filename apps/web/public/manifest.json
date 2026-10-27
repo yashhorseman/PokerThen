@@ -1,0 +1,8 @@
+{
+  "name": "PokerThen",
+  "short_name": "PokerThen",
+  "theme_color": "#272727",
+  "background_color": "#272727",
+  "start_url": "/",
+  "icons": [{ "src": "/art/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }]
+}

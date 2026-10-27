@@ -1,0 +1,19 @@
+{
+  "name": "@pokerthen/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fairness": "./src/fairness.ts",
+    "./delta": "./src/delta.ts",
+    "./validators": "./src/validators.ts",
+    "./testing": "./src/testing/index.ts",
+    "./fixtures": "./src/fixtures/index.ts"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  }
+}

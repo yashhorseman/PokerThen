@@ -1,0 +1,3 @@
+# c-table-quota - unlimited table creation and no retention (LOW-MEDIUM; cap APPLIED, cleanup proposed)
+An empty table is 1.5 KB on disk, but tables are never deleted (U-N2), `/new-game` is limited per IP only (10/min; fully bypassable before c-xff-spoof), and every table is kept in memory and persisted. Applied: `LIMITS.MAX_TABLES = 3000` in `limits.ts`, enforced in `Registry.create` (throws -> HTTP 503).
+Proposed (owner decision U-N2, not applied): drop tables that never started a hand and have been idle 24 h; archive tables idle 90 days. Sketch in `Registry`: a daily sweep `for (t of tables) if (t.state.handNumber === 0 && clock() - t.lastTouchedAt > 86_400_000 && t.subs.size === 0) { t.dispose(); tables.delete(id); fs.remove(t.store.dir); }`.

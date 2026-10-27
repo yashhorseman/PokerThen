@@ -1,0 +1,6 @@
+# c-input-hardening - small input issues (LOW; NOT applied)
+1. Nicknames accept control, zero-width and bidi-override characters (`"a\nb"`, `"ab‮ba"`, `"​​"` blank name, NUL): invisible names, forged extra log lines (a `\n` in a name is written into every log line that names the player), look-alike impersonation (`Unique​` next to `Unique`). Proposed in the engine `requestIngress` and router `/new-game`: reject `/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁤﻿]/` and compare uniqueness on `name.normalize("NFKC").toLowerCase()` with those characters stripped. Also count length in code points everywhere (`/new-game` uses code points, `requestIngress` UTF-16 units).
+2. Two seated players can both be named `Guest` (uniqueness check skips the reserved watcher name): `taken` should only skip players whose status is `watching`.
+3. `GET /games/:id/players_sessions/%E0%A4%A` throws URIError -> HTTP 500 + log noise; wrap `decodeURIComponent` and answer 404.
+4. `TOGGLE_MUTE_PLAYER` accepts arbitrary 10-char ids and the per-player `muted` array is unbounded (state bloat): cap at 50 and require a known id.
+5. Chat is relayed verbatim (HTML as text; the client escapes it - verified in headless Chrome, 8/8 payloads inert, no CSP violations).

@@ -1,0 +1,9 @@
+/* harness-only: base/canvas (W4) + landscape table (W5) stand-ins. Not shipped. */
+html, body { margin: 0; height: 100%; background: #201e1f; font-family: Mulish, sans-serif; overflow: hidden; }
+#main-container { height: 100%; width: 100%; display: flex; align-items: center; justify-content: center; }
+#canvas { aspect-ratio: 16/9; position: relative; display: flex; width: 100%; overflow: hidden; box-shadow: 0 0 2rem rgba(0,0,0,.34); background: #2a2a2a; }
+.landscape #canvas { }
+.portrait #canvas { aspect-ratio: 1/1.8; }
+@media (min-aspect-ratio: 16/9) { .landscape #canvas { width: auto; height: 100%; } }
+@media (min-aspect-ratio: 1/1.8) { .portrait #canvas { width: auto; height: 100%; } }
+#canvas * { box-sizing: border-box; }

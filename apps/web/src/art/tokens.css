@@ -1,0 +1,60 @@
+/* PokerThen art tokens (W8). Original palette. U-A2 [OWNER]: final felt/rail/card-back colours pending; change here + art/palette.ts. */
+:root {
+  --pt-felt-center: #1f7480;
+  --pt-felt-mid: #195b68;
+  --pt-felt-edge: #124350;
+  --pt-felt-bottom: #0d2f39;
+  --pt-felt-line: #f2b84b;
+  --pt-felt-red-center: #8a2f3e;
+  --pt-felt-red-edge: #531a25;
+  --pt-rail: #1b1a22;
+  --pt-room: #222027;
+  --pt-room-tile: #2a2831;
+  --pt-accent: #f2b84b;
+  --pt-accent-deep: #c98a1e;
+  --pt-plum: #3a2a78;
+  --pt-ink: #15131c;
+  --pt-cream: #fbf6e9;
+  /* page chrome (home / new game): body #201e1f per SPEC 1.1 */
+  --pt-page-bg: #201e1f;
+  --pt-letterbox: #1f1f1f;
+  /* images (all under /art, tiny SVG) */
+  --pt-card-back: url("/art/card-back.svg");
+  --pt-felt-desktop: url("/art/felt-desktop.svg");
+  --pt-felt-desktop-red: url("/art/felt-desktop-red.svg");
+  --pt-felt-phone: url("/art/felt-phone.svg");
+  --pt-felt-phone-red: url("/art/felt-phone-red.svg");
+  --pt-room-tile-img: url("/art/room.svg");
+  --pt-dealer-disc: url("/art/dealer.svg");
+  --pt-straddle-disc: url("/art/straddle.svg");
+}
+
+.pt-card-back {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  background: var(--pt-card-back) center / 100% 100% no-repeat;
+  border-radius: inherit;
+}
+.pt-felt { width: 100%; height: 100%; background-repeat: no-repeat; background-size: 100% 100%; background-position: center; }
+.pt-felt-desktop { background-image: var(--pt-felt-desktop); }
+.pt-felt-desktop.pt-felt-red { background-image: var(--pt-felt-desktop-red); }
+.pt-felt-phone { background-image: var(--pt-felt-phone); }
+.pt-felt-phone.pt-felt-red { background-image: var(--pt-felt-phone-red); }
+.pt-room-bg {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, .55) 100%),
+    var(--pt-room-tile-img) 0 0 / 160px 160px repeat;
+  background-color: var(--pt-room);
+}
+.pt-disc, .pt-seat-slot { display: block; width: 100%; height: 100%; }
+.pt-disc svg, .pt-seat-slot svg { display: block; }
+.pt-disc-dead { opacity: .5; }
+.pt-icon { display: inline-block; vertical-align: middle; flex: none; }
+.pt-suit { display: inline-block; vertical-align: middle; flex: none; }
+.pt-logo svg { display: block; }
+.pt-placeholder-table {
+  position: absolute; inset: 0; background-size: cover; background-position: center;
+  filter: blur(.5rem) brightness(.75); transform: scale(1.06);
+}
+.pt-placeholder-desktop { background-image: url("/art/placeholder-desktop.svg"); }
+.pt-placeholder-phone { background-image: url("/art/placeholder-phone.svg"); }

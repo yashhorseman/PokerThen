@@ -1,0 +1,22 @@
+/* core/ui primitives (W4). rem = 3.2% of canvas height; modals use rem*zoom so 1em ~ 16px (SPEC 3). */
+.button-1{position:relative;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;background:transparent;color:#fff;font:inherit;font-weight:700;text-transform:uppercase;border:.08rem solid #b9b9b9;border-bottom-width:.15rem;border-radius:.3rem;cursor:pointer;padding:0 .6em;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.button-1.green{color:#39af6b;border-color:#39af6b}.button-1.green.highlighted{background:#3fa76c;color:#fff;border-bottom-color:#348959}
+.button-1.red{color:#fc4117;border-color:#fc4117}.button-1.red.highlighted{background:#c15942;color:#fff}
+.button-1.gray{color:#b9b9b9;border-color:#b9b9b9}.button-1.gray.highlighted{background:#7b7b7b;color:#fff}
+.button-1.yellow{color:#ffea00;border-color:#ffea00}.button-1.blue{color:#7f7df5;border-color:#7f7df5}
+.button-1.dark-gray{color:#cfcfcf;border-color:#454545;background:#2f2f2f}
+.button-1:disabled,.button-1.disabled{opacity:.25;cursor:default}
+.button-1 .pt-hotkey-badge{position:absolute;top:-.28rem;right:.5rem;background:#232122;color:#fff;font-size:.5rem;font-weight:700;padding:0 .2rem;line-height:.8rem;text-transform:none;pointer-events:none}
+.landscape .pt-hotkey-badge{display:block}.portrait .pt-hotkey-badge{display:none}
+.pt-scrim.pt-overlay-scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:flex;align-items:center;justify-content:center}
+.alert-1{--pt-fs:calc(1rem * var(--table-design-system-zoom,.617));font-size:var(--pt-fs);box-sizing:border-box;width:min(48.6em,calc(100% - 3em));background:#fff;color:#222;border-radius:.6em;padding:1em;box-shadow:0 0 2em rgba(0,0,0,.4);font-family:Mulish,sans-serif}
+.alert-1-title{font-weight:700;margin-bottom:.6em}
+.alert-1-message{background:#ececec;border-radius:.4em;padding:1em;white-space:pre-line;line-height:1.4}
+.alert-1-checkbox{display:block;margin-top:.8em;font-size:.85em}
+.alert-1-buttons{display:flex;justify-content:flex-end;gap:.6em;margin-top:1em}
+.alert-1-buttons .button-1{font-size:1em;height:2.6em;padding:0 1.6em}
+.popover-1{background:#fff;color:#222;border-radius:.5em;padding:.9em;box-shadow:0 0 1em rgba(0,0,0,.35);z-index:150;font-family:Mulish,sans-serif;font-size:calc(1rem * var(--table-design-system-zoom,.617))}
+.pt-popover-arrow{position:absolute;width:.9em;height:.9em;background:#fff;transform:rotate(45deg)}
+.pt-popover-right .pt-popover-arrow{left:-.45em;top:calc(50% - .45em)}.pt-popover-left .pt-popover-arrow{right:-.45em;top:calc(50% - .45em)}
+.pt-popover-top .pt-popover-arrow{bottom:-.45em;left:calc(50% - .45em)}.pt-popover-bottom .pt-popover-arrow{top:-.45em;left:calc(50% - .45em)}
+.pt-connect-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:15em;font-size:1rem;background:rgba(0,0,0,.83);color:#fff;border-radius:.6em;padding:1em 1em 1.5em;box-shadow:0 0 .5em rgba(0,0,0,.41);text-align:center;z-index:30}

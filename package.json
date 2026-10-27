@@ -2,32 +2,32 @@
   "name": "pokerthen",
   "private": true,
   "version": "0.1.0",
-  "description": "PokerThen \u2014 private poker tables with a server-side, verifiable shuffle",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
-  "engines": {
-    "node": ">=22"
-  },
+  "description": "PokerThen: private play-money Texas Hold'em tables (PokerNow-style) with verifiable server shuffles",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "workspaces": ["packages/*", "apps/*"],
   "scripts": {
-    "dev:server": "npm run dev -w @pokerthen/server",
-    "dev:web": "npm run dev -w @pokerthen/web",
-    "build": "npm run build -w @pokerthen/web && npm run build -w @pokerthen/server",
-    "typecheck": "tsc -b packages/engine packages/protocol apps/server && npm run typecheck -w @pokerthen/web",
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -b",
     "test": "vitest run",
-    "start": "node apps/server/dist/server.cjs",
-    "package": "node scripts/package.mjs",
-    "e2e": "node e2e/smoke.cjs",
-    "deploy": "bash scripts/deploy.sh"
+    "test:watch": "vitest",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "start": "node dist/app/server.cjs",
+    "pack:zip": "node scripts/deploy-zip.mjs",
+    "verify-hand": "tsx scripts/verify-hand.ts"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
-    "@types/ws": "^8.5.13",
-    "esbuild": "^0.24.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.7.0",
-    "vitest": "^2.1.8",
-    "puppeteer-core": "^23.11.1"
+    "@types/node": "^22.20.5",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-react": "^4.7.0",
+    "esbuild": "^0.24.2",
+    "puppeteer-core": "^23.11.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "vitest": "^2.1.9"
   }
 }

@@ -1,42 +1,265 @@
-# Architecture
+# PokerThen - ARCHITECTURE.md (the build contract)
 
+Companion to `docs/SPEC.md` (what to build, verbatim copy, numbers). This file says HOW: technology, repo layout, wire protocol, persistence, fairness, tests, and the work split with strict ownership. If SPEC and this file conflict on behaviour, SPEC wins; on structure/interfaces, this file wins. Section numbers `SPEC n` refer to SPEC.md.
+
+## 1. Constraints (from the hosting brief and the owner)
+- Azure App Service Linux, Node 22, **one instance only**, listen on `process.env.PORT` (all interfaces), WebSockets on, HTTPS only (TLS ends at the front end: trust `X-Forwarded-*`).
+- Persistent storage only `/home` -> game data under `/home/data` (`DATA_DIR`). `/tmp` and the deploy folder are wiped on each deploy/restart. **State is persisted (fsync) before any command is acknowledged or any frame is broadcast.**
+- Deploy = `esbuild` bundle to `server.cjs` + static files + a `package.json` with `start: node server.cjs`, zipped (`npm run pack:zip`), no `npm install` on Azure. **Never deploy unless the owner asks.**
+- Cookies `Secure; HttpOnly; SameSite=Lax`; `Origin` check on WebSocket upgrades (and on unsafe HTTP methods); application-level ping ~20 s; client reconnects with backoff.
+- Secrets only in App Service settings (`SESSION_SECRET`); never commit/print.
+- Fairness: server-side crypto shuffle (Fisher-Yates + rejection sampling), per-hand SHA-256 commitment, reveal in hand log/replay, public `/verify` (SPEC 20). It is the ONLY addition to the PokerNow clone.
+
+## 2. Technology choices (and why)
+| Concern | Choice | Reason |
+|---|---|---|
+| Language | TypeScript 5.9 everywhere, `strict` | one set of types for engine, server, client (`@pokerthen/shared`) |
+| Runtime | Node 22 | App Service runtime; global WebCrypto (`crypto.subtle`) is used by the shared fairness code in Node AND browsers |
+| Realtime | `ws` 8 with our own JSON protocol (NOT socket.io) | smallest dependency that esbuild can bundle into one file; we control framing, ping, Origin check, backpressure; the reference's socket.io is invisible to users. Semantics (full snapshot + delta chain + `<D>` delete sentinel + RUP) are copied from the reference so research maps 1:1 |
+| Server state | In-memory authoritative `TableState` per table + synchronous persistence (atomic temp-write + fsync + rename) to `/home/data` | single instance, tiny state, exact ordering guarantees; no DB to deploy |
+| Engine | Pure, deterministic, I/O-free state machine in `packages/engine`; `now` and entropy injected | exhaustively unit-testable; fairness code is auditable in one place |
+| Client | React 18 + Vite 5, plain CSS files (flat kebab class names as in the reference), no CSS framework | the UI is a pixel-exact absolute-positioned rem canvas; React gives the same "render from frame diffs + CSS transitions" model the reference uses (it uses React 16); plain CSS keeps selector names identical to SPEC so numbers transfer verbatim |
+| Layout | ONE scaled canvas: `html{font-size: .032 * canvasHeight}`, all sizes in rem/%, `html.landscape|portrait` classes (SPEC 3) | exact clone requirement |
+| State mgmt (client) | tiny hand-written store (`useSyncExternalStore`), reducer chain -> `TableViewModel` (frozen contract in shared) | no extra deps; derived data identical to the reference's reducer chain |
+| Tests | vitest 2 (unit, engine property tests, server integration), puppeteer-core 23 + system Chrome (`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`) for scripted multi-client e2e + screenshot QA | tools already in `node_modules` |
+| Build | esbuild 0.24 (server -> `dist/app/server.cjs`, target node22, cjs), Vite (client -> `dist/app/public`) | per hosting brief |
+| Fonts | `@fontsource/mulish` (200,300,400,700,900) and `@fontsource/abril-fatface` self-hosted | OFL; no runtime Google dependency |
+
+## 3. Repository layout
 ```
-packages/engine    pure poker rules + RNG-free state machine, SHA-256, Merkle commitment, evaluator
-packages/protocol  zod command schemas, snapshot types shared by server and browser
-apps/server        node http + ws, room actor, JSON persistence, static hosting
-apps/web           React + Vite client
+package.json                npm workspaces: packages/*, apps/*   (ROOT: architect/W1)
+tsconfig.base.json, tsconfig.json (project references), vitest.config.ts   (ROOT: architect/W1)
+docs/SPEC.md, docs/ARCHITECTURE.md                                 (architect; builders propose edits via the change protocol 14.3)
+research/                   read-only reference material (gitignored evidence)
+packages/shared/            @pokerthen/shared  (W1)   types, constants, delta/diff, fairness verify, prefs, view-model + engine API contracts, validators, fixtures
+packages/engine/            @pokerthen/engine  (W2)   rules engine, RNG/shuffle/commitment, evaluator, equity, projection, log text, ledger
+apps/server/                @pokerthen/server  (W3)   HTTP + WS server, tables, persistence, chat, logs, fairness store
+apps/web/                   @pokerthen/web     (W4..W8) React client
+  index.html, vite.config.ts, public/               W4 (public/ assets generated by W8 inside public/art/)
+  src/main.tsx, App.tsx, router.tsx                 W4
+  src/core/**                                       W4  socket, store, view model, canvas, orientation, clock, prefs, hotkeys, ui primitives, TableScreen composition
+  src/table/**                                      W5  table surface components + landscape styling
+  src/actions/**                                    W6  action bar, pre-actions, bet panel, show-hand, RIT prompt, time bank, I'm back, cancel ingress
+  src/phone/**                                      W6  portrait.css overrides + phone-only behaviour
+  src/menus/**                                      W7  options, config screens, players, modals, sit popover, log/ledger, chat, rebuy
+  src/art/**, src/audio/**, src/pages/**            W8  icons/logo/felt/card-back, synthesized sounds, home/new-game/tutorial/verify pages
+  test/**                                           per-owner subfolders: test/<w>/ (W4 test/core, W5 test/table, ...)
+scripts/build.mjs, dev.mjs, deploy-zip.mjs, verify-hand.ts   (W3 owns after the architect skeleton; they already work)
+tests/e2e/                  harness + scenarios: harness/** W3; scenarios/<wN>-*.mjs by the named owner
+dist/                       build output (gitignored)
+.data/                      dev DATA_DIR (gitignored)
 ```
+Dependency rule (no cycles): `shared <- engine <- server`; `shared <- web`. The web app NEVER imports `engine` or `server`. The server never imports `web`.
 
-## Engine (`packages/engine`)
+## 4. Scripts, config, environment
+`package.json` scripts (already created): `dev` (server on :3000 via `tsx watch` + Vite on :5173 with proxies for `/ws` and the HTTP API), `build` (Vite -> `dist/app/public`, esbuild -> `dist/app/server.cjs`, writes `dist/app/package.json`), `typecheck` (`tsc -b`), `test` (vitest run), `test:e2e` (`tests/e2e/run.mjs`), `start`, `pack:zip` (build + `zip -qr dist/app.zip .` inside `dist/app`; prints the `az webapp deploy` command and does NOT run it), `verify-hand` (CLI fairness check).
+Environment (server): `PORT` (default 3000), `DATA_DIR` (default `/home/data` when `WEBSITE_SITE_NAME` is set, else `./.data`), `SESSION_SECRET` (REQUIRED when `NODE_ENV=production`; dev default allowed), `ALLOWED_ORIGINS` (comma list, optional), `DEV_ORIGINS` (dev only), `NODE_ENV`. Static files served from `<dir of server.cjs>/public` (index fallback only for known SPA routes `/`, `/home`, `/start-game`, `/games/:id`, `/verify`, `/poker-tutorial`).
 
-`apply(state, command, now) → { state, events }` — clones the state, applies one command, or throws an `EngineError` with a typed code. It never reads the clock or generates randomness: the shuffled deck and salts arrive in `START_HAND`, and time arrives as `now`. That makes every hand replayable and lets the property tests drive it deterministically.
+## 5. Wire protocol
 
-Hand phases: `BETTING → RUNOUT_VOTE → RUNOUT → COMPLETE`. Streets are derived from the board length.
+### 5.1 HTTP (same origin; cookie `ptn` identifies the player; 10 s client timeout; HTTP 202 on any API call => client `location.reload()`)
+Bodies/types are in `packages/shared/src/http.ts`; validation shapes in `shared/validators.ts`; field-error texts in `shared/constants.ts` (`FIELD_ERRORS`). 422 body = `FieldErrors` (`{field: message}`) except `start-game` = `{value: string}`.
+| Method + path | Who | Body -> response |
+|---|---|---|
+| GET `/`, `/home`, `/start-game`, `/games/:id`, `/verify`, `/poker-tutorial` | anyone | HTML shell; **sets cookie `ptn` if absent**; unknown/invalid `/games/:id` -> 302 `/` |
+| GET `/current-player-infos` | anyone | `CurrentPlayerInfos` (also sets cookie) |
+| POST `/new-game` | anyone | `NewGameRequest` -> `NewGameResponse`; creates the table, owner seated with stack 1000, SB/BB 10/20; 422 `{playerName}` |
+| POST `/games/:id/request_ingress` | any | `RequestIngressBody` -> 200 text `OK`; 422 per SPEC 2.3; 403 `{code:"missing_game_player"}` if the cookie has no player record |
+| POST `/games/:id/approve_player` `{playerID, stack?}` | owner | 200; also serves the Players-list approve form |
+| POST `/games/:id/reject_player`, `remove_player`, `transfer_ownership`, `put_in_away_mode` `{playerID}` | owner | 200 |
+| POST `/games/:id/update_player` `{playerID, stackChange, stackChangeMode}` | owner | `{queued:boolean}` |
+| POST `/games/:id/toggle_god_mode` `{playerID, allow}` | owner | 200 |
+| POST `/games/:id/update_game` (`GameConfig`) | owner | `{queued}`; 422 field map |
+| GET `/games/:id/current_or_next_configs` | any in game | `GameConfig` (queued one if pending) + `queued:boolean` |
+| GET `/games/:id/players/:pid` | owner | `{player, enqueuedChanges}` for the edit screen |
+| POST `/games/:id/start-game` | owner | 200 or 422 `{value}` |
+| POST `/games/:id/request_rebuy` `{value}` / `resolve_rebuy` `{playerID, approve, stack?}` | seated / owner | 200 or 422 `{message}` |
+| GET `/games/:id/players_sessions`, `/players_sessions/:pid` | any in game | `LedgerResponse` / `LedgerSession[]` |
+| GET `/games/:id/ledger_:id.csv`, `/games/:id/pokerthen_log_:id.csv` | any in game | CSV (log capped at 20,000 lines) |
+| GET `/api/games/:id/log_v3?hand_number=N[&after_at=]` | any in game | `LogEntry[]` rendered for the requesting player (hides other players' `Your hand is` lines) |
+| GET `/api/games/:id/fairness/:hand` | **public (no cookie needed)** | `FairnessRecord` (commitment always; reveal only after SPEC 20.4) |
+| GET `/healthz` | anyone | `Health` |
+| WS `/ws?gameID=<id>&layout=d|m[&firstConnection=true]` | cookie | protocol 5.2 |
+"any in game" = a cookie whose player id is known to that table (watchers count). HTTP errors: 401/403 JSON `{code}`; 404 plain; 429 `{code:"too-many-actions"}`; 503 log busy text per SPEC 15.1.
 
-Betting rules in one place (`doAction`, `legalActions`):
-- A player may raise if they have not acted this street, **or** the wager they last matched is at least one full raise below the current bet (`currentBet − actedLevel ≥ minRaise`). This tracks reopening per player; a single short all-in never reopens, cumulative ones do once they reach a full raise.
-- Opening bets below the big blind (short all-ins) can be completed to the big blind.
-- Short forced bets simply leave a player all-in; the amount to call is still the full big blind.
+### 5.2 WebSocket (JSON text frames; types in `shared/protocol.ts`)
+- Upgrade checks: `Origin` header must equal `https://<Host>` (host from `X-Forwarded-Host` else `Host`; scheme from `X-Forwarded-Proto`) or be in `ALLOWED_ORIGINS`/`DEV_ORIGINS`; missing/mismatched -> reject (close 4403 / HTTP 403). Cookie `ptn` must resolve to a player id (else close 4401 -> client shows `session-missing-token`). Unknown game -> close 4404. Per-IP cap on open sockets (placeholder 20; exceed -> `failed` `too-many-connections`, close 4429). Per-socket message rate cap (placeholder 40 msgs per 2 s burst; exceed -> `failed` `too-many-actions`, close 4430). Both limits are U-N1 placeholders in `apps/server/src/limits.ts`.
+- Client -> server (`ClientMsg`): `{t:"action", action: ActionMsg}`, `{t:"chat", text}`, `{t:"ping", ts}`, `{t:"rue"}`. **Actions get no ack**; effects appear in the next `gC`. Invalid/illegal actions are ignored silently (as the reference); the server logs them. Actions before `registered` is sent are dropped except `RUP`.
+- Server -> client (`ServerMsg`): `registered` (full projected `Frame` + `you`), `gC` (delta), `rup` (full frame reply to RUP), `chat`, `chatHistory`, `nEM`/`rEM` (emoji delta/full with a version counter; gap -> client sends `rue`), `igpu`, `notice`, `pong`, `disposed`, `failed`.
+- Keep-alive: client sends `ping` every 20 s (`T.APP_PING`), server answers `pong {ts, serverNow}`; in addition the server sends WebSocket protocol pings every 20 s and terminates sockets that miss a pong for 5 s (`T.PONG_TIMEOUT`). Idle tables still get a meta-only `gC` every 10 s (SPEC 21; carries `meta.sN` for clock sync). Client: reconnect with exponential backoff 1 s..5 s (jitter .5, infinite attempts), reconnect URL drops `firstConnection`; on every connect the server sends a full `registered`; the client replays it through the same path as first load (cards already flipped, timers from absolute deadlines).
 
-Settlement (`pots.ts`, `showdown`): uncalled excess is refunded; pots are built from sorted contribution levels; folded players fund pots but are never eligible; ties split with odd chips to the first winner left of the dealer; run-it-twice splits each pot between boards (odd chip to run 1). Show order: last aggressor first (else left of dealer); a hand is shown only if it can beat or tie the best so far; winners always show.
+### 5.3 Frame model, delta and snapshot strategy
+- `Frame` (shared/frame.ts) is the **per-recipient projection** of the authoritative state: `meta` (id, `now`, `pre`, `sN`, version, `mEV` emoji version), `table`, `seats`, `players`, `hand`, `turn`, `cards`, `result`, `rabbit`, `you`. Readable names replace the reference's short keys; mapping for anyone reading the research:
+  `status`->table.status, `ownerID`->table.ownerId, `uP`->table.pausedAt, `sG`->table.stopQueued, `gN`->table.handNumber/hand.handNumber, `hI`->hand.handId, `dealerSeat/dealerID/deadButton`->hand.*, `sBPI/bBPI/lSPI`->hand.smallBlindId/bigBlindId/straddleId, `iHPI`->hand.inHandIds, `pGS`->hand.playerStatus, `gT`->hand.street, `nR`->hand.runs, `oTC`->hand.board, `pot`->hand.pot, `tB`->hand.bets, `cHB`->hand.highestBet, `mR`->hand.minRaise, `mAVTB`->hand.maxBet, `wBACPI`->hand.optionIds, `cRPI`->hand.noReraiseIds, `bigBlindCheck`->hand.bigBlindChecked, `directToNexTurn`->hand.directToNext, `tHC`->hand.winningBoardCards, `cPI/pITT/pASA/dLTWoTB/dLTWTB`->turn.playerId/taking/actionStartedAt/deadlineNoBank/deadlineWithBank, `sNA/sNAA`->turn.nextStep/nextStepAt, `pTB`->turn.bankMs, `wRITD/rITD`->turn.ritWaiting/ritVotes, `pC`->cards, `gameResult`->result, `rHC/rHP/rH`->rabbit, `gDM`->table.godModeIds, `aD`->config.autoDeal, `aGC`->config.guestChat. Next-step codes keep their reference names (`FCPFS NSAA NSAF NSAAD NSARD NSAGRS NSAGR FOAR`).
+- **Snapshot**: `registered` on every (re)connect and `rup` on request. **Delta**: `gC.delta` is `diffFrames(lastSentToThisSocket, nextProjection)` with `meta.now/pre/sN` always present; semantics = `applyDelta` (plain objects merge recursively, arrays and scalars replaced wholesale, string `"<D>"` deletes a key; both functions live in `shared/delta.ts` and are used by server and client).
+- **Chain**: the server keeps per socket the last frame it sent; `delta.meta.pre` = that frame's `meta.now`. The client applies a delta only if `delta.meta.pre === current.meta.now`; otherwise it sends `{t:"action", action:{type:"RUP"}}` and ignores deltas until the `rup` full frame arrives. `meta.now` strictly increases per socket (server uses `max(Date.now(), last+1)`).
+- When to send: after every successful engine command/tick the server computes each connected viewer's projection and sends a delta only if it differs (ignoring meta); plus the 10 s keep-alive.
+- `engine.frame()` is a pure function of state + viewer (+ `now` only for `meta`). No wall-clock-dependent fields: every countdown is an absolute deadline in the frame.
+- Clock sync (client): `offset = Date.now() - frame.meta.sN` from every frame (latest wins); `serverNow() = Date.now() - offset`; no RTT correction (as the reference).
+- Frame pacing (server-driven, SPEC 7.2): after an action the first frame carries the action result (bets, `taking:null`, `nextStep NSAA|NSAF`, `nextStepAt=now+800`); at +800 ms the next-actor frame (`playerId/taking`, deadlines already INCLUDING the time bank; the reference sends a third +280 ms frame correcting the deadline - invisible, so omitted [ARCH]).
 
-Dealing procedure (this is what the verifier checks): with `n` players, listed starting left of the dealer, player `k` holds `deck[k]` and `deck[n+k]`. Then burn at `2n`, flop `2n+1..3`, burn `2n+4`, turn `2n+5`, burn `2n+6`, river `2n+7`. Run 2 continues from the cursor with its own burns.
+### 5.4 Hidden-card rules (security-critical; test R-1)
+The projection function in `packages/engine/src/frame.ts` is the ONLY place that decides what a viewer may know.
+1. `cards[playerId].cards[i]` for every player in the hand has one slot per dealt hole card. For the viewer's OWN cards: `{value, showing:false}` (value present, face visible to you only). For every other player (including the owner, spectators, anonymous): `{value:null, showing:false}` (count only).
+2. Folded players: their `cards` becomes `[]` unless they chose to show (then `showing:true` slots).
+3. Values for other players are sent only with `showing:true`, to ALL viewers at the same frame: showdown reveals, the all-in reveal (when `revealAllWhenNoAction`), and voluntary `SHOW_HAND` (next frame). `name1/name2` (hand descriptions) are sent only for cards that are showing, and for the viewer's own hand from the flop on. `prob1` only while `hand.directToNext`.
+4. Spectator mode: a viewer with `players[id].spectator === true` and unseated receives `value` for seated players who set `allowSpectator`; nobody else.
+5. Rabbit: `rabbit.cards` only in frames to players in `rabbit.hunters`; others get `rabbit.hunters` ids only. `name1RH/name2RH` only to the requester.
+6. The deck, salt and any undealt card never appear in any frame or HTTP response before the reveal (SPEC 20.4). `TableState` is never serialised to clients. Log endpoint redacts `onlyFor` lines.
+7. A server test (`apps/server/test/leak.test.ts`) plays scripted hands and asserts that no frame/HTTP payload sent to any socket contains a hidden card code (scan raw JSON for all 52 codes against the allowed set).
 
-Scheduling: `nextDue(state)` says which command (`TIMEOUT`, `VOTE_TIMEOUT`, `STEP`, `START_HAND`) is due and when. `PAUSE`/`RESUME` shift every absolute timestamp so the remaining time is preserved. After a crash the server applies a 10 s recovery grace so nothing becomes overdue while it was down.
+### 5.5 Sequences
+- Join: GET `/games/:id` (cookie) -> WS connect -> `registered` -> POST `request_ingress` -> `gC` (players[pid].status `requestedGameIngress`) to all -> owner POST `approve_player` -> `gC` seats/players (status `inGame`, or `waitingNextGameToEnter` mid-hand) + `igpu` to the joiner. Reject: `gC` deletes `players[pid]` (`"<D>"`).
+- Hand: owner `start-game` (or next hand) -> engine shuffles, computes commitment, **persists state + commit, then** emits `gC` with `hand`, hole `cards`, `turn`. Actions as in 5.3.
+- Reconnect: new WS -> `registered` full frame (own hole cards present) -> client replays.
 
-## Server (`apps/server`)
+## 6. Engine contract (W2 implements, W3 calls; frozen in `shared/engineApi.ts`)
+- State: `TableState` (opaque JSON). Functions: `createTable`, `command(state, actor, cmd, ctx)`, `tick(state, ctx)`, `nextWakeAt(state)`, `frame(state, viewer, now)`, `playerName`, `isOwner`, `mutedIds`, `ledger`, `ledgerSessions`. All pure and synchronous; `ctx = {now, entropy}`; the engine NEVER calls `Date.now()`, `Math.random()` or Node `crypto` directly except through `entropy`.
+- Commands (`EngineCommand`): `requestIngress`, `approvePlayer`, `rejectPlayer`, `updatePlayer`, `removePlayer`, `transferOwnership`, `putInAway`, `toggleGodMode`, `updateGame`, `startGame`, `requestRebuy`, `resolveRebuy`, `action`, `presence`, `resume`. Result `{ok:true,state,effects}` or `{ok:false,status,errors|value|code}`; failed commands must not change state.
+- Effects (`EngineEffect`): `log` (raw `"Name @ id"` lines + `handNumber`, optional `onlyFor`), `commit`, `reveal`, `notice`, `systemChat`. The server persists effects before broadcasting.
+- Phases (internal) and their `turn.nextStep` / durations (SPEC 7.2): `waiting` -> hand start (blinds, deal, commit) -> `betting` (`FCPFS`, deadline = limit [+ bank]) -> after an action `NSAA|NSAF` 800 ms -> street change or `showdown/award` -> `result` (`NSAGR` 3000 ms fold-win; `NSAGRS` showdown = Showdown Presentation Time) -> next hand (auto) or wait for Next Hand. All-in: uncalled returned, `ritVote` (`NSARD` 10 s) or direct, `allInReveal` (`NSAAD` 4 s), run-out streets 4000 ms each, award +3900 ms, next hand +8070 ms. Rabbit window = result window (+3000 ms per click). Pause freezes `nextWakeAt` (stores remaining). Rebuy wait phases (`FOAR`).
+- Required engine guarantees (tested): chip conservation (sum stacks + pot constant except owner stack changes); unique cards; side-pot correctness; deterministic replay: same state + same command + same ctx => identical result; every `commit` precedes any frame containing hole cards; engine placeholders listed in SPEC 22 live in `packages/engine/src/placeholders.ts` re-exporting `shared/constants.PLACEHOLDERS`.
+- Equity: exact enumeration when remaining boards <= 50,000 else Monte-Carlo (`PLACEHOLDERS.EQUITY_MONTE_CARLO_RUNS`) seeded from `entropy`; computed only when `directToNext`, cached per street.
 
-- **Room actor (`room.ts`)** — one `Room` per table, executed synchronously (single-threaded Node ⇒ commands are serialised). Owns admission, requests, ledger, queued stack/rule changes, chat, the log, and builds each viewer's snapshot. A command is validated, applied (engine first, so nothing is half-applied), persisted, then acknowledged.
-- **Idempotency** — every command carries a `commandId`; results are stored per member (last 100). Same id + same payload replays the result; same id + different payload is refused.
-- **Queued changes** — while a member is in a hand, stack edits, add-ons and rule changes are queued and applied at the hand boundary in this order: settle → queued stack changes → queued rule change → schedule next hand.
-- **Persistence (`store.ts`)** — one JSON file per room in `DATA_DIR`, written to a temp file and renamed. The hand's deck and salts are sealed with AES-256-GCM (key derived from `SESSION_SECRET`) and removed from the plaintext JSON.
-- **Transport (`server.ts`)** — `POST /api/v1/guest-sessions`, `POST /api/v1/rooms`, `GET /api/v1/rooms/:id`, `GET /api/v1/rooms/:id/ledger.csv`, `/healthz`, and a WebSocket at `/ws`. Guest identity is an HMAC-signed `HttpOnly` cookie. Origin is checked for the WebSocket and for cookie-authenticated writes. Message size is capped at 16 KB, commands are token-bucket limited, chat is limited to 5 messages / 10 s, table creation to 12 / hour / IP.
-- **Snapshots** — the server sends each viewer a full snapshot after every change (tables are small). A reconnecting client receives the current snapshot immediately.
+## 7. Server architecture (W3)
+Modules in `apps/server/src/`: `main.ts` (bootstrap, graceful SIGTERM flush), `env.ts`, `http/` (router, static, routes, csv), `ws/` (hub, sockets, rate limits, keep-alive), `session.ts` (cookie token, HMAC id), `security.ts` (origin, forwarded headers), `tables/` (registry, `TableRunner`: one serialized command queue per table, timer scheduler using `nextWakeAt`), `persistence/` (atomic store, append logs, boot recovery), `chat/` (history, mute lookups, profanity placeholder), `logs/` (hand log store/redaction/CSV), `fairness/` (records, public endpoint), `limits.ts`.
+- **Command pipeline** (per table, strictly serial): receive (HTTP or WS) -> validate shape (zod) -> `engine.command` -> if ok: (1) append log lines + fairness records (`fsync`), (2) atomically write `state.json` (seq+1), (3) update in-memory state, (4) broadcast deltas, (5) reply HTTP 200. If not ok: reply 4xx with errors, nothing persisted. Timers: after each step re-arm one `setTimeout` for `engine.nextWakeAt`; on fire run `tick` through the same pipeline.
+- Identity: cookie `ptn` = 50-char URL-safe random token (`crypto.randomBytes`), `Secure` (when https or production) `HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000`. `playerId = base64url(HMAC-SHA256(SESSION_SECRET, token)).slice(0,10)`. No server-side session store needed.
+- Player presence: socket count per (table, player); transitions -> `presence` command (marks `disconnectedSince`).
+- Boot recovery: scan `DATA_DIR/tables/*`, load `state.json`, drop log/fairness lines with `seq > state.seq`, send `resume{downtimeMs}` (so timers resume with the remaining time), start timers. Unknown/garbled table dirs are moved to `DATA_DIR/quarantine/`.
+- Chat: server-side history (last 200 messages kept in `state.json` sidecar `chat.jsonl`), muted ids per player come from the engine; guest-chat flag enforced here; profanity filter = placeholder interface (U-C2).
+- Static: `Cache-Control: public, max-age=31536000, immutable` for hashed assets, `no-cache` for HTML.
+- Graceful shutdown: on SIGTERM stop accepting, flush pending persistence, close sockets with 1001.
 
-## Web (`apps/web`)
+## 8. Persistence format (`DATA_DIR`)
+```
+DATA_DIR/
+  VERSION                      "1"
+  tables/<gameId>/
+    state.json                 {"v":1,"seq":N,"savedAtMs":ms,"state":<TableState>,"wake":ms|null}   (atomic: write state.json.tmp, fsync, rename, fsync dir)
+    log.jsonl                  {"seq":N,"createdAt":ms*100,"handNumber":n,"msg":"...","onlyFor"?:"pid"}   append + fsync
+    fairness.jsonl             {"seq":N,"type":"commit",...EngineEffect commit} | {"seq":N,"type":"reveal",...FairnessReveal}   append + fsync
+    chat.jsonl                 {"seq":N,"at","playerID","playerName","message",...}
+  quarantine/
+```
+- `TableState` contains the live deck and salt of the running hand (needed to survive restarts); `state.json` is therefore secret: file mode 0600, never served. After the reveal the deck/salt live on in `fairness.jsonl` (public via the fairness endpoint).
+- Write order guarantees: commit record durable before the first frame with hole cards; state durable before any ack. Crash window: records with `seq > state.seq` are discarded on boot.
+- Table retention: tables live until the owner abandons them; no GC in v1 (U-N2: owner to decide a retention policy).
 
-`useRoom` keeps one WebSocket with reconnect + backoff and a command promise per `commandId`. `fairness.ts` verifies proofs in the browser. Layout uses CSS container query units so the table scales to the space left over by the action dock; the seat anchors for ten seats come from the product spec (desktop) with a two-column portrait variant.
+## 9. Security checklist
+Origin check (WS + unsafe HTTP), cookie flags, no CORS headers, `X-Forwarded-*` trusted only when `WEBSITE_SITE_NAME` set or `TRUST_PROXY=1`, zod validation on every body/message, max body 16 KB, max WS message 4 KB, chat 100 chars (server enforces), names trimmed/validated by engine, no HTML injection (React escapes; log lines rendered as text), rate limits, `SESSION_SECRET` required in production, hidden-card leak test (5.4), `Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://<host>`.
 
-## Known simplifications vs the product spec
+## 10. Client architecture
 
-Single process with file persistence instead of Postgres/Redis + multiple workers with fencing; full snapshots instead of snapshot + delta streaming; no media server. See [IMPLEMENTATION-STATUS.md](IMPLEMENTATION-STATUS.md).
+### 10.1 Layering (apps/web/src)
+`socket (core/socket)` -> `frame store (core/store)` -> `deriveViewModel (core/viewModel)` -> React components in `table/`, `actions/`, `menus/`, `pages/`. Components receive data ONLY through hooks exported by `core/hooks.ts` (W4): `useTableVM(): TableViewModel`, `useTableActions(): TableActions`, `useChatVM(): ChatVM`, `usePrefs(): [Prefs, PrefsApi]`, `useAudio(): AudioApi`, `useServerNow(): () => number`, `useOrientation(): Orientation`, `useHotkey(key, handler, opts)`, `useFrame()` (raw frame, read-only escape hatch for menus/ledger: players list, config). Types for the VM, actions and prefs live in `@pokerthen/shared` (`viewModel.ts`, frozen).
+- **Store**: `GameStore { frame: Frame|null; prev: Frame|null; connection; chat; emojis; clockOffset }`, updated by `registered | gC | rup | chat | ...`; delta chain + RUP logic in `core/socket/session.ts`; reconnect/backoff per SPEC 21 / 5.2. Every update recomputes the view model with structural sharing (memoised per slice) so unchanged seats do not re-render.
+- **deriveViewModel(frame, prev, prefs, now, orientation)**: pure; implements the rotation rule (SPEC 4.4, C1), formatting (`formatValue`), status labels (SPEC 4.5), button rules (SPEC 6.1/6.2), bet-panel math (SPEC 6.3), equity pill, hand chips, winner state, rabbit slots, center messages, owner controls. Unit-tested with the fixtures.
+- **Pre-actions (intended actions)** live in `core/store/intent.ts` (SPEC 6.2): store, drop rules, auto-send on your turn, check-or-fold conversion; W6 only renders them from `ActionBarVM`.
+- **Canvas**: `core/canvas/ScaledCanvas.tsx` renders `#main-container > #canvas`, installs the ResizeObserver, sets `html` font-size and `--table-design-system-zoom`, toggles `html.landscape|portrait` (SPEC 3), freezes rem while an input is focused (iOS), recomputes after orientation changes. Everything inside is rem/%.
+- **Audio**: W4 subscribes to frame transitions and calls `AudioApi.play` per SPEC 18.1 (two-taps on check/BB-check, chips on bet change, fold, winner on own win, card-place per board flip (W5 triggers this one from the flip), beep on your turn, warning-beep >70%, chat-beep, new-player-beep). W8 implements `AudioApi` in `src/audio/index.ts` (WebAudio synthesis, silent `dumb-sound` unlock on first gesture).
+- **Hotkeys**: `core/hotkeys.ts` is the single keydown listener implementing SPEC 6.4 (disabled on mobile UA and while any modal/popover/input is focused/open; `+` ignores the global lock). Components register handlers via `useHotkey`.
+- **UI primitives (W4, `core/ui/`)** used by everyone: `<Button1 color throttleMs hotkey badge>` (colours/disabled/badge per SPEC 6.1), `showAlert(message, {ok})`, `showConfirm({title?, message, confirmLabel, cancelLabel, checkbox?})` (white `alert-1` card, scrim, SPEC 4.9), `<Popover anchor placement onClose>` (white `popover-1` card with arrow), `<Scrim>`, `<Toast>` (= alert), `useModalLock()` (disables hotkeys). Look and CSS: `core/ui/ui.css`.
+- **Routing**: `router.tsx` (history API, no library): `/` and `/home` -> `pages/Home`, `/start-game` -> `pages/NewGame`, `/games/:id` -> `core/screens/TableScreen`, `/verify` -> `pages/Verify`, `/poker-tutorial` -> `pages/Tutorial`; unknown -> `/`. After POST `/new-game` success `history.replaceState` to `/games/<id>` and mounts TableScreen without reload (SPEC 1.3).
+- **TableScreen composition** (`core/screens/TableScreen.tsx`, W4): inside `<ScaledCanvas>`: `<Table/>` (W5, includes seats, board, pot, dealer, infos, left/right button columns, banners, center text, rabbit bar, next-hand/start/shuffle buttons, spectator count, disconnect banner), `<ActionArea/>` (W6), `<ChatDock/>` and `<LogButton/>` (W7), overlay hosts (alerts, popovers, `<ConfigScreen/>`, `<QuickAcceptHost/>`, log modal) from W7, `<TosBar/>` (W8). Z-order follows SPEC 4.1 (`.disconnect-warning` 201 > chat 20 > ...).
+
+### 10.2 DOM and CSS contract
+- Class names listed in SPEC (flat kebab-case, e.g. `.table-player`, `.table-player-infos-ctn`, `.table-player-bet-value`, `.table-pot-size`, `.table-cards.run-1|run-2`, `.card-container.big|med|small`, `.time-to-talk`, `.game-decisions-ctn(.low)`, `.button-1.action-button`, `.raise-controller-form`, `.default-bet-button`, `.show-hand-buttons`, `.rit-container`, `.reveal-button`, `.win-odds-container`, `.player-hand-message-ctn`, `.dealer-button-ctn`, `.top-buttons`, `.top-right-buttons`, `.chat`, `.log-modal`, `.popover-1`, `.alert-1`) are mandatory so that research numbers apply verbatim and e2e/geometry tests can query them. Extra internal classes must be prefixed `pt-`.
+- CSS file ownership: `core/styles/base.css` + `core/ui/ui.css` (W4: html/body/#canvas/overlay primitives/`button-1`), `art/tokens.css` (W8: felt/rail/room/card-back as CSS variables + backgrounds), `table/table.css` (W5: ALL landscape rules for table components), `actions/actions.css` (W6: landscape + portrait rules of action components), `menus/menus.css` (W7: everything in menus incl. their portrait rules), `pages/pages.css` (W8), `phone/portrait.css` (W6: `.portrait ...` overrides for W5's table components and chrome positions, loaded LAST). Import order in `main.tsx` (W4): base, tokens, ui, table, actions, menus, pages, portrait.
+- No inline pixel sizes: positions use rem/% from SPEC tables; the only inline styles are dynamic values (timer widths, transforms).
+- Art hooks: W8 exposes React components `Logo`, `Icon name=...`, `SuitIcon`, `CardBack`, `FeltDesktop`, `FeltPhone`, `RoomBackground`, `DealerDisc`, and CSS variables (`--pt-felt-*`, `--pt-card-back`), listed in `art/README.txt` (W8 writes it). W5/W6/W7 import ONLY from `art/index.ts`.
+
+## 11. Fairness architecture (SPEC 20)
+- `packages/engine/src/rng.ts`: `uniformInt(entropy, n)` with rejection sampling on 32-bit draws; `shuffle(entropy)` = Fisher-Yates over `CANONICAL_DECK`; `newSalt(entropy)` = 32 bytes hex. Production entropy = `crypto.randomBytes`. Unit tests: crafted entropy proves rejection (values >= limit are redrawn), distribution test (chi-square over 1e6 draws, loose threshold), permutation validity, no modulo bias for n=52 edge.
+- `packages/engine/src/fairness.ts`: builds the commitment with `shared.computeCommitment` (async in shared; the engine needs a SYNCHRONOUS hash - use `node:crypto` `createHash("sha256")` in `engine/src/hash.ts` producing the same bytes; a unit test asserts the sync and WebCrypto implementations agree for random inputs). Emits the `commit` effect before any card is exposed and `reveal` at the end of the result window (including stop/close). The deal cursor records `usage` (SPEC 20.3).
+- Server stores records in `fairness.jsonl`, serves `GET /api/games/:id/fairness/:hand` publicly, appends the two dimmed log lines (SPEC 20.5) when it receives `commit`/`reveal` effects (the engine supplies the text via `logText.ts` so replays are identical).
+- Client `/verify` (W8): pure browser verification with `shared.verifyReveal` + log comparison + chain check; `scripts/verify-hand.ts` is the same logic in Node.
+- Tamper evidence: the chain (`prevCommitment`) plus append-only `fairness.jsonl` mean an operator cannot change an earlier hand's deck after publishing its commitment without breaking the chain for later hands. Residual trust: the commitment proves the deck was fixed before play, not that the shuffle was uniform; uniformity is auditable via the open source and tests.
+
+## 12. Test strategy
+1. **Unit (vitest, `npm test`)**
+   - shared: delta/diff round trips (property test with random trees), commitment/verify, formatting, validators.
+   - engine (W2, the largest suite): evaluator vs brute-force 7-card best-5 on random hands + all category edge cases (wheel, kickers, ties); pots/side pots (random all-in generators, conservation); betting rules (min-raise chains, short all-in no-reopen, straddle order, heads-up order, dead button/dead SB, missed blinds); each transcript in SPEC 11/12/13/14/15.2 replayed with scripted entropy and compared with the verbatim log lines; run-it-twice (votes, timeouts, odd-chip placeholder isolated), rabbit hunt, timers (limit, bank, auto fold/check, pause freeze, `resume`), seat management (ingress, approve/reject, edit player, transfer, away/leave/quit/bust), config queueing, ledger arithmetic, **projection leak tests** (exhaustive states x viewers: no hidden value ever present), deterministic replay, RNG tests (section 11), equity vs known results.
+   - client (W4-W8): `deriveViewModel` table-driven tests from fixtures (rotation, labels, button states, presets), intended-action store, bet-panel validity, formatting; React component tests with `react-dom/server` or happy-dom-free DOM stubs are optional - geometry is verified in the browser tests below.
+2. **Server integration (vitest, real `ws`, temp `DATA_DIR`)** (W3): create table via HTTP, join sockets, play a hand; Origin rejection; cookie flags; delta chain + `RUP`; **crash recovery** (kill the server object mid-hand, restart from disk, same deck/commitment, timers resume, no duplicate log lines); persistence-before-ack ordering test (fault-injecting fs that fails after N writes -> command must fail and state must not advance); hidden-card leak test (5.4 item 7); rate limits; fairness endpoint before/after reveal; static serving and 302 for unknown games.
+3. **Scripted multi-client e2e with puppeteer-core** (`npm run test:e2e`, harness in `tests/e2e/harness`, W3 owns the harness; scenario files owned by the named workstream): starts a real server on a free port with a temp `DATA_DIR`, drives N isolated incognito contexts (`browser.createBrowserContext()`; Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`, headed when `E2E_HEADED=1`), one per player, phone contexts use iPhone UA + touch + DPR 3. Helpers: `createTable(name)`, `joinAndSit(ctx, name, seat, stack)`, `approveAll(owner)`, `act(ctx, 'call'|'raise 100'|...)`, `waitText`, `waitClass`, `measure(selector)`, `shoot(ctx, name)`. Controlled decks: the harness starts the server with `DEV_FIXED_DECKS=<file>` (honoured ONLY when `NODE_ENV!=='production'`; swaps the `entropy` for a scripted source) so showdowns, all-ins and run-it-twice are reproducible.
+   Scenarios (each maps to SPEC): E1 create/join/approve/reject/ignore/cancel (SPEC 2); E2 first hand heads-up + 4-handed, dealer rotation, blinds, BB option; E3 fold-win timings (3.0 s) and award tick; E4 showdown order, hand names, log lines, ledger; E5 all-in + side pots + RIT yes/no/timeout with 4 s street spacing and equity pills; E6 straddle; E7 timeouts and time bank, pause/resume; E8 leave seat/away/stop; E9 rabbit hunting; E10 owner tools (edit player, remove, transfer, config queue); E11 chat + bubbles + mute; E12 reconnect (kill socket mid-hand, `registered` replays, cards pre-flipped); E13 fairness (commit in log before cards, reveal after window, `/verify` PASS, tamper FAIL); E14 spectator mode/god mode; E15 persistence (restart server between actions). Scenario authors (files `tests/e2e/scenarios/<wN>-E<k>-*.mjs`): W7 E1, E4, E10, E11; W5 E2, E3, E9, E14; W6 E5, E6, E7, E8; W4 E12; W8 E13; W3 E15.
+4. **Visual/geometry QA** (W5/W6/W7/W8 each write measurement scripts for their areas): at 1440x900, 1024x768, 768x1024 (tablet portrait UA), 390x844, 360x740 (+430x932, 375x667, phone landscape 844x390) compare `getBoundingClientRect/getComputedStyle` with the SPEC tables (tolerance 1 px / 1% rem) and save screenshots to `research-scratch/shots/<w>/...` for the human visual pass (the owner prefers looking at screenshots). Compare against `research/evidence/*` stills side by side (not copied into the repo).
+5. **CI order**: `typecheck` -> `test` -> `build` -> `test:e2e`. A change is "done" when all pass and the owner-listed acceptance checks of its workstream pass.
+
+## 13. Work split (8 parallel workstreams, STRICT ownership)
+Rules: (a) a workstream edits ONLY the paths it owns; (b) imports across workstreams only through the named public entry points; (c) frozen contract files (`packages/shared/src/{engineApi,viewModel,frame,protocol,http,constants}.ts`) change only via the architect (14.3); (d) every builder reads SPEC section 0 (conflicts), 0.1 (scope), 22 (unknowns) plus the sections listed; (e) never fill a SPEC-22 unknown: use the placeholder and leave a `// U-xx` comment; (f) the old `research/` tree is read-only.
+
+### W1 - Shared types, protocol, fixtures (owner of `packages/shared/**`, root config)
+- Owns: `packages/shared/**`, root `package.json`, `tsconfig*.json`, `vitest.config.ts`, `.gitignore`.
+- Inputs: SPEC 2, 3, 10, 15-16, 20-21; this file 5, 6. The skeleton, types, delta, fairness verify, validators, view-model and engine API contracts ALREADY exist (architect); W1 reviews them against SPEC and finishes them.
+- Outputs: (1) corrections/gaps in `frame.ts/protocol.ts/http.ts/viewModel.ts` found while integrating (coordinate with the architect: these are frozen once W2-W8 start; do the review in the first hours); (2) `packages/shared/src/fixtures/`: typed `Frame` + `TableViewModel` fixtures for UI work: waiting-alone, waiting-2-players (owner), preflop-your-turn, off-turn-preaction, facing-bet-raise-panel, flop/turn/river, showdown-two-runs, all-in-equity, rit-prompt, rabbit-available, folded, away, offline, spectator, phone-4-opponents, 10-seats-full, rotated-hero-seat-6 (names/stacks/cards taken from research evidence); (3) `shared/src/testing/` (`scriptedEntropy`, `fakeClock`, frame builders); (4) `docs/CHANGES.md` log of every contract change; (5) property tests for delta/diff and validators; (6) package `exports` kept stable.
+- Acceptance: `npm run typecheck && npm test` green; every field of `Frame` that SPEC 5.3 maps has a fixture exercising it; fixtures round-trip `applyDelta(diffFrames(a,b))`; W4/W5/W6/W7 can render all fixtures.
+
+### W2 - Rules engine, RNG, fairness (owner of `packages/engine/**`)
+- Owns: `packages/engine/**` (src + test). Depends on `@pokerthen/shared` only; Node-only code allowed (`node:crypto` for the sync hash) but NOT for rng (entropy injected).
+- Inputs: SPEC 8, 10, 11, 12, 13, 14, 15 (log text, ledger), 16 (`SSP` only), 20, 21, 22; this file 5.4, 6, 11, 12.
+- Outputs: implementation of the frozen `EngineApi` (`engine` export) with modules: `rng.ts`, `hash.ts`, `fairness.ts`, `deck.ts` (deal cursor + usage), `eval/` (7-card evaluator, hand names/short chips/log text, combination ordering), `equity.ts`, `table/` (seats, ingress, approvals, edit/remove/transfer, away/leave, rebuy, config queue, ledger), `hand/` (blinds, button/dead button, straddle, betting rules, pots, uncalled returns, showdown order/muck, all-in reveal, RIT, rabbit, award, timers/bank, pause, resume), `commands.ts`, `frame.ts` (projection, SPEC 21/5.4), `logText.ts` (every verbatim line of SPEC 15.2), `placeholders.ts` (SPEC 22 constants), `index.ts`.
+- Milestones: M1 seating + hand start + betting + fold-win + frame projection (server can integrate); M2 showdown + side pots + log; M3 all-in/RIT/rabbit/equity; M4 timers/pause/resume/rebuy/straddle/antes placeholders; M5 hardening.
+- Acceptance: all of SPEC 12-14 transcripts replay exactly (log lines byte-identical incl. double spaces); chip conservation + unique-card property tests pass over 20k random hands; leak tests pass; deterministic replay test; RNG tests (11); sync/async hash agreement; `tick` honours every SPEC 7.2 timing (tests with fake clock); no `Date.now`/`Math.random`/direct `node:crypto` randomness (lint test greps src).
+
+### W3 - Server (owner of `apps/server/**`, `scripts/**`, `tests/e2e/harness/**`, `tests/e2e/run.mjs`)
+- Owns: `apps/server/**`, `scripts/**` (build/dev/deploy-zip/verify-hand), e2e harness + runner, root-level Azure notes in `apps/server/README.md` (short).
+- Inputs: this file 1, 4, 5, 7, 8, 9, 12; hosting brief; SPEC 1.4, 2, 15, 17, 20, 21.
+- Outputs: everything in section 7: HTTP routes (5.1), WS hub (5.2/5.3: projection per socket, delta chain, RUP, keep-alives), tables registry + runner + timers, persistence (section 8) with boot recovery and fault tests, cookie sessions, Origin check, rate limits, static serving, CSV exports, chat store, log store/redaction, fairness endpoint, graceful shutdown, `/healthz`. Until W2 lands, develop against `apps/server/test/fakeEngine.ts` implementing `EngineApi`.
+- Acceptance: integration tests (12.2) green incl. crash recovery and persistence-before-ack; `npm run build` produces a self-contained `dist/app` that starts with `node server.cjs` and no `node_modules`; `npm run pack:zip` works; Origin/cookie checks demonstrated; leak test green; `ws` with 50 sockets x 5 tables stays < 150 MB RSS and < 20% CPU idle on B1-equivalent settings (document measurements); e2e harness can run E1-E15.
+
+### W4 - Client core (owner of `apps/web/{index.html,vite.config.ts,public/*.json,src/main.tsx,src/App.tsx,src/router.tsx,src/core/**,test/core/**}`)
+- Inputs: SPEC 1.3-1.4 (identity/connect cards), 3 (canvas), 6.2/6.4, 7.3, 16, 18.1, 21; this file 5, 10.
+- Outputs: socket client (connect/reconnect/backoff/ping/RUP, `Connecting...` and `Connection failed!` states via `ConnectionVM`), store, `deriveViewModel`, intent store, `ScaledCanvas`, orientation, clock, prefs store (`localStorage currentPlayer`), hotkeys, `core/ui` primitives + `ui.css`, `TableActions` implementation (WS actions + HTTP calls with SPEC error handling, HTTP 202 reload), audio trigger wiring, chat/emoji state, `TableScreen`, router, `main.tsx` style imports, `useX` hooks (10.1), HTML meta/viewport/manifest per SPEC 3, dev proxy.
+- Acceptance: deriveViewModel unit tests over all W1 fixtures; delta chain/RUP tested against a scripted socket; rem recompute verified at all SPEC 3 viewports (puppeteer geometry); keyboard-freeze behaviour verified with emulated focus; reconnect test (E12); no component outside `core/` touches sockets or `fetch`.
+
+### W5 - Table surface, desktop (owner of `apps/web/src/table/**`, `test/table/**`)
+- Inputs: SPEC 4 (all), 7 (animations), 12.1-12.2, 13.3, 14, 5 (for class/structure compatibility with W6's portrait overrides); `TableViewModel`/`TableActions`; `art/index.ts`.
+- Outputs: `Table` and children: `Felt`, `Seat/EmptySeat` (opens W7 `SitPopover`), `PlayerPlate` (name auto-shrink, stack, status, glows, prize pill, badges, mood emoji, bubble), `HoleCards`/`Card` (all variants, sub-suit, four-colour, flipper), `BoardCards` (150 ms staggered flips, run-2 row, rabbit slots + `RevealBar`), `Pot`, `DealerDiscs` (0.5 s slide), `BetPill`, `TimerBar` (100 ms redraw, red at 70%), `EquityPill`, `HandChip`, `GameInfos`, `TopLeftButtons` (Options, Leave Seat, Away/I'm Back with confirm via core ui), `TopRightButtons` (sound, spectators, pause, stop), `CenterMessages`, `WaitingBanner` (+Copy Link 2 s), `NextHandButton`, `StartGameButtons` (Start Game/Shuffle Seats), `SpectatorCount`, `DisconnectBanner`, `FullscreenButton`, `GameTypeWatermark`; `table.css` with every landscape rule from SPEC 4. Calls `AudioApi.play('card-place')` per flip. Exports `Table` from `table/index.ts`.
+- Acceptance: geometry script reproduces every number in SPEC 4.1/4.4/4.5/4.6/4.7/4.8 at 1440x900 and 1024x768 (1 px tolerance) using fixtures; animation timings measured with MutationObserver match SPEC 7.2 (flip stagger 146-154 ms, glow classes, dealer slide .5 s); screenshots side by side with research stills; no layout shift across 2..10 occupied seats and all W1 fixtures.
+
+### W6 - Action area + phone layout (owner of `apps/web/src/actions/**`, `apps/web/src/phone/**`, `test/actions/**`, `test/phone/**`)
+- Inputs: SPEC 5 (all), 6 (all), 12.3, 13.2, 2.4 (cancel ingress), 8 (I'm back); `ActionBarVM`, `BetPanelVM`, `TableActions`; W5's class names.
+- Outputs: `ActionArea` (action bar with exact labels/rules/colours/opacity/lock, `Check or Fold`/pre-action highlighting, YOUR TURN signal + blinker, time bank button/chip, `BetPanel` desktop + phone scale transforms (presets, slider, +/- by BB, BB tag, validity colour, Enter/Esc), `ShowHandButtons`, `RitPrompt`, `IAmBack`, `CancelIngressButton`, hotkey registrations for k/c/r/f/i/t/Enter?/s/1/2 (Enter/m/l/p/h belong to their component owners) via `useHotkey`), `actions.css`; `phone/portrait.css` with ALL `.portrait` rules of SPEC 5.2-5.6 for W5's classes (seat anchors, plate, bet pills, board scale .54, pot, dealer, chrome strip, options popover direction, sit popover positions, modals full-screen <=600px, chat sheet positioning hooks for W7 classes) and `phone/` helpers (e.g. touch long-press hook `useLongPress(500)` exported for W7's Log button).
+- Acceptance: every measured number in SPEC 5.2-5.6 and 6.1/6.3 reproduced at 390x844, 360x740, 430x932, 375x667 and 768x1024 (portrait UA) within 1 px; action state table-driven tests vs `ActionBarVM`; bet presets/validity tests; hotkeys disabled on mobile UA/modals; screenshots of off-turn/on-turn/raise/all-in/RIT/show-hand states on phone and desktop.
+
+### W7 - Menus, settings, ledger, log, chat, modals (owner of `apps/web/src/menus/**`, `test/menus/**`)
+- Inputs: SPEC 2.3-2.4, 8.6, 9, 10, 15, 16, 17, 4.9 (alerts); `TableActions`, `ChatVM`, `useFrame`, `core/ui` primitives; art icons.
+- Outputs: `OptionsPopover` (badge, items per SPEC 9.1), `ConfigScreen` with tabs `Players` / `Game` / `Preferences` (+ `Back`): `PlayersList`, `EditPlayer` (all toasts/confirms), `GameSettings` (all 19 fields, defaults, owner vs read-only, blind levels table with `+` hotkey, countdown/reset selects, lock messages, presets popover, queued banner, submit label rules, error alerts), `Preferences` (all kept rows), `SitPopover` (all fields/errors/positions), `QuickAcceptHost` + modal (queue, `do not show this again?`), rebuy dialogs, spectator warning, `LogModal` (Full Log/Ledger tabs, pager, download, states, entry classes + `entry-fairness`, name tooltip, long-press from `LogButton`), `LedgerView`, `ChatDock` (desktop box/expand/compose/mute list/recording dot; phone button + bottom sheet + auto-message balloon), `LogButton`, owner notices; `menus.css`.
+- Acceptance: all strings verbatim (grep test against the SPEC 19 catalogue); field defaults equal SPEC 10; 422 error rendering for sit popover matches SPEC 2.3 table; queued vs immediate config behaviour; log pagination/caching rules (max 50 hands, incremental `after_at`); ledger sorting/arrows/totals; phone sheets full-screen <= 600 px; keyboard/Esc handling; screenshots at all QA viewports.
+
+### W8 - Art, sounds, home/create/verify pages (owner of `apps/web/src/art/**`, `apps/web/src/audio/**`, `apps/web/src/pages/**`, `apps/web/public/art/**`, `test/art/**`, `test/pages/**`)
+- Inputs: SPEC 1 (all), 18, 20.5 (/verify page), 3 (backgrounds); owner's art rules (all artwork original; do NOT copy reference images/fonts/audio).
+- Outputs: ORIGINAL logo, favicon.png/apple-touch-icon/og image, card back, suit icons, UI icon set (list in SPEC 18.2), dealer/straddle discs, felt desktop+phone (+ red spectator variants), room background texture, blurred new-game placeholder, `art/index.ts` + `art/README.txt` (component/CSS-variable catalogue), `art/tokens.css`; WebAudio-synthesized sounds implementing `AudioApi` for the 11 names (SPEC 18.1; <=600 ms each), volume steps, silent unlock; pages: `Home` hub (sidebar, hero, footer, mobile drawer), `NewGame` (blurred placeholder, card, loading state, 422 error, TOS bar `TosBar`, `ConnectCard` for `Connecting...`/`Connection failed!`), `Tutorial` (static rules page), `Verify` (SPEC 20.5), page titles/meta.
+- Acceptance: pixel measurements of Home/New Game per SPEC 1.2-1.3 at 1440x900/1024x768/390x844; `/verify` PASS on a real revealed hand from an e2e run and FAIL on a tampered deck/salt; audio test (OfflineAudioContext render) shows each sound non-silent, within length limits, no clipping; asset budget < 400 KB total; contrast/visual review screenshots; no reference assets present (checked by a script comparing against `research/evidence` hashes).
+
+### Interface summary (who calls whom)
+| Producer -> Consumer | Interface | File |
+|---|---|---|
+| W1 -> all | types, constants, delta, fairness verify, validators, VM/actions/prefs/audio types, fixtures | `@pokerthen/shared` |
+| W2 -> W3 | `EngineApi` (`engine`) | `shared/engineApi.ts`, `engine/src/index.ts` |
+| W3 -> W4 | HTTP routes (5.1) and WS protocol (5.2-5.4) | `shared/http.ts`, `shared/protocol.ts` |
+| W4 -> W5/W6/W7/W8 | hooks (10.1), `TableViewModel`, `TableActions`, `core/ui` primitives | `core/hooks.ts`, `shared/viewModel.ts` |
+| W8 -> W5/W6/W7/W4 | `art/index.ts` components + CSS variables, `AudioApi` | `art/index.ts`, `audio/index.ts` |
+| W7 -> W5 | `SitPopover`, `OptionsPopover` components | `menus/index.ts` |
+| W5 -> W6 | class names + DOM structure (SPEC 4) for portrait overrides | `table/table.css` |
+| W6 -> W7 | `useLongPress` | `phone/index.ts` |
+| W5/W6/W7 -> W4 | exported root components `Table`, `ActionArea`, `ChatDock`, `LogButton`, `ConfigScreen`, `QuickAcceptHost` | each `index.ts` |
+
+## 14. Delivery, quality bars, risks
+
+### 14.1 Milestones and dependencies
+M0 (done by the architect): workspaces, tsconfigs, scripts, shared package (types/contracts/delta/fairness/validators) compiling; stub engine/server/web build and a `/healthz` smoke passes. M1: W1 fixtures; W2 seating+hand+projection; W3 pipeline against fake engine; W4 canvas+store+VM; W5/W6/W7/W8 against fixtures. M2: first end-to-end hand (E1-E3) desktop. M3: phone (E2 at phone viewports), showdown/side pots (E4), menus basics. M4: RIT/rabbit/equity (E5/E9), settings/ledger/log, chat, fairness page (E13). M5: persistence/recovery (E15), reconnect (E12), polish, full QA screenshots at all viewports, owner review. Blocking edges: W2->W3 (real engine), W3->W4 (live server; until then a mock socket from fixtures), W4->W5/W6/W7 (hooks; mock provider in `shared/testing`), W8 art -> W5/W6/W7 (placeholder `Icon` renders text until art lands).
+### 14.2 Definition of done (every workstream)
+Code + tests in own paths; `npm run typecheck && npm test` green; acceptance checks above demonstrated with output/screenshots in the final report; no TODO without a SPEC-22 id; no copying of reference assets or code; no console errors/warnings in e2e runs; no deploys.
+### 14.3 Change protocol
+Builders never edit paths they do not own and never edit frozen contract files. To request a contract change: create `docs/requests/<wN>-<topic>.md` (own file) with the proposed diff and reason; the architect (or W1 after the first review) applies it to the owner's files, appends to `docs/CHANGES.md` and notifies affected workstreams. SPEC corrections are requested the same way. Live-measured evidence always beats a report claim (SPEC 0 rule).
+### 14.4 Risks and owner decisions
+- **R1 Deck reveal leaks information the reference never shows** (mucked/folded hole cards and undealt cards become public when the reveal is published, SPEC 20.4). Chosen: publish when the result window closes (after the rabbit window). Alternative if the owner prefers: reveal only the cards that were dealt to showing players + a salted per-card Merkle commitment (would let anyone verify revealed cards while keeping mucked cards private) - not built; **[OWNER decision]**.
+- R2 Restarts mid-hand: handled by persistence + `resume`; Azure restarts also happen on deploy: deploy only between games.
+- R3 Equity cost on one B1 vCPU: exact enumeration capped at 50k boards, Monte-Carlo otherwise, computed once per street only when all-in.
+- R4 Unknown rules (SPEC 22) isolated behind placeholders; the largest user-visible risks: odd chip (U-D5), `Always` RIT (U-RIT1), antes (U-G5), run-out single-run spacing (U-T3).
+- R5 iOS Safari quirks (keyboard, `visualViewport`, fullscreen): SPEC 3 behaviours are mandatory; test on a real phone before release (hosting brief).
+- R6 Trial credit expires about 2026-11-24: remind the owner before then.
+- **Owner decisions pending**: R1; felt/rail/card-back colours (U-A2); retention policy for old tables (U-N2); whether `Always` RIT should skip the prompt silently (U-RIT1); landing page copy (U-H1); profanity rules (U-C2).

@@ -1,0 +1,2 @@
+# W7 request: confirm core hook signatures
+menus/deps.ts assumes: `useHotkey(key: string, handler: () => void, opts?: {enabled?: boolean; skipGlobalLock?: boolean})`; `useModalLock(): void` (hook, active while mounted); `useTableData(): TableDataApi`; `useTableVM().rebuy`/`.configQueued` (W7 currently derives queued from loadConfigs().queued). Also W5 renders `<SitPopover seatNo position onClose/>`; both `seatNo` and `seat` accepted. Please tell W7 if any differs.

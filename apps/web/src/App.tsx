@@ -1,22 +1,39 @@
-import { useEffect, useState } from 'react';
-import { Landing } from './components/Landing';
-import { TablePage } from './components/TablePage';
-import { Toasts } from './components/ui';
+import { useEffect } from "react";
+import { installHotkeys } from "./core/hotkeys";
+import { OverlayHost } from "./core/ui";
+import { TableScreen } from "./core/screens/TableScreen";
+import { Home, NewGame, Tutorial, Verify } from "./pages";
+import { matchRoute, navigate, useRoute } from "./router";
+import { AppApi } from "./core/api/client";
 
-const roomFromPath = () => location.pathname.match(/^\/t\/([A-Za-z0-9_-]{8,64})\/?$/)?.[1] ?? null;
+const appApi = new AppApi();
 
-export default function App() {
-  const [room, setRoom] = useState<string | null>(roomFromPath());
+function NewGameRoute() {
+  return (
+    <NewGame
+      createGame={async (req) => {
+        const r = await appApi.createGame(req.playerName, req.playerStack);
+        return r.ok ? { ok: true, data: r.response } : { ok: false, status: 422, errors: r.errors };
+      }}
+      onCreated={(res) => navigate(`/games/${res.gameID}`, { replace: true })}
+    />
+  );
+}
+
+export function App() {
+  const route = useRoute();
+  useEffect(() => installHotkeys(), []);
   useEffect(() => {
-    const f = () => setRoom(roomFromPath());
-    addEventListener('popstate', f);
-    return () => removeEventListener('popstate', f);
-  }, []);
-  const open = (id: string) => { history.pushState(null, '', '/t/' + id); setRoom(id); };
+    if (matchRoute(location.pathname) === null) navigate("/", { replace: true });
+  }, [route]);
   return (
     <>
-      {room ? <TablePage roomId={room} key={room} /> : <Landing onCreated={open} />}
-      <Toasts />
+      {route.name === "home" && <Home />}
+      {route.name === "newGame" && <NewGameRoute />}
+      {route.name === "table" && <TableScreen key={route.gameId} gameId={route.gameId} />}
+      {route.name === "verify" && <Verify />}
+      {route.name === "tutorial" && <Tutorial />}
+      <OverlayHost />
     </>
   );
 }

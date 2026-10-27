@@ -1,0 +1,6 @@
+# B2 request (core/viewModel/actionBar.ts) - Show-hand group stays during run-outs and shows "active" segments
+
+Evidence: research/evidence/live-gaps/m1_dave_rit.png, m1_dave_showbtn.png, phone_390_rit_montage.jpg, research/07 s1+3 ("SHOW ALL CARDS S / 5 1 / J 2 buttons appear at +0.53 s" after the last RIT answer) and the live CSS (`.show-hand-buttons button.active {background:#39af6b;color:#fff}`; non-active = outline + green text).
+- Not yet shown (m1_dave_rit): outlined group, green text.  - Already shown to everybody (run-out reveal, showdown; m1_dave_showbtn, phone-leave-seat-dialog): the SAME group stays, segments filled green (`active`).
+Ours: `deriveActionBar` builds `showHand.cards` from `unshownOwnCards(...)`, so once the all-in reveal flips the cards the group disappears for the rest of the run-out/result (tests: all-in RIT at 390x844, shots research-scratch/shots/b2/*-rit-0[2-7]-*). 
+Proposal: keep the group while `(atResult || runOut)` and the viewer holds cards; expose `showHand.cards: {code, shown}[]` (or a parallel `shown: CardCode[]`) and let `ShowHandButtons` add `.active` to shown segments (CSS for `.active` already shipped in apps/web/src/phone/portrait.css). Clicking an already shown segment must stay a no-op (behaviour unknown - U-xx).
